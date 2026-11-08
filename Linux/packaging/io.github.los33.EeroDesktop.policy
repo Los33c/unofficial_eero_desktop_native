@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Lets eero Desktop bring the Guardian WireGuard tunnel up or down with wg-quick
+     after the user authenticates (used when NetworkManager is not available). -->
+<policyconfig>
+  <vendor>eero Desktop (Unofficial)</vendor>
+  <action id="io.github.los33.EeroDesktop.vpn">
+    <description>Connect or disconnect the eero Guardian VPN</description>
+    <message>Authentication is required to change the eero Guardian VPN tunnel</message>
+    <icon_name>io.github.los33.EeroDesktop</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/eero-desktop/eero-desktop</annotate>
+  </action>
+</policyconfig>

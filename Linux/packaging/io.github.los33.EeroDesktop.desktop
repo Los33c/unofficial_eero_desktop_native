@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=eero Desktop
+GenericName=Network manager
+Comment=Unofficial desktop client for eero mesh wifi networks
+Exec=eero-desktop
+Icon=io.github.los33.EeroDesktop
+Terminal=false
+Categories=Network;GTK;
+Keywords=eero;wifi;mesh;router;network;
+StartupNotify=true
+StartupWMClass=io.github.los33.EeroDesktop
+SingleMainWindow=true

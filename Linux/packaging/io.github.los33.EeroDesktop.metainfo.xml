@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.los33.EeroDesktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <name>eero Desktop (Unofficial)</name>
+  <summary>Manage your eero mesh wifi network from the desktop</summary>
+  <developer id="io.github.los33"><name>Carlos B. (Los33)</name></developer>
+  <description>
+    <p>An independent desktop client for eero mesh wifi networks: network status, devices, profiles, security, activity and settings. Not affiliated with Amazon or eero.</p>
+  </description>
+  <launchable type="desktop-id">io.github.los33.EeroDesktop.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <releases><release version="1.1.0" date="2026-11-07"/></releases>
+</component>
