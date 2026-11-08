@@ -146,32 +146,53 @@ namespace EeroDesktop
         }
         private void AppearancePage()
         {
-            Sub("Choose how eero Desktop looks on this Windows account.");
-            var body = new StackPanel(); body.Children.Add(Text("App theme", 20, "#17263C", true));
-            body.Children.Add(Text("Use your Windows preference, or choose a light or dark appearance.", 13, "#64738A"));
-            var choices = new WrapPanel { Margin = new Thickness(0, 16, 0, 10) };
-            foreach (string value in new[] { "System", "Light", "Dark" })
+            Sub("Choose how eero Desktop looks. This only changes this app on this Windows account.");
+            AddGroupHeading(page, "Theme");
+            var tiles = new Grid(); for (int c = 0; c < 3; c++) tiles.ColumnDefinitions.Add(new ColumnDefinition());
+            string[] values = { "System", "Light", "Dark" }, labels = { "Match Windows", "Light", "Dark" }, notes = { "Follows your Windows light or dark setting", "Always light", "Always dark" };
+            for (int i = 0; i < values.Length; i++)
             {
-                string selected = value;
-                var choice = new RadioButton { Content = value == "System" ? "Use Windows setting" : value, GroupName = "AppTheme", IsChecked = UiPreferences.Theme == value };
-                System.Windows.Automation.AutomationProperties.SetName(choice, value + " theme");
-                choice.Checked += delegate { UiPreferences.Theme = selected; UiPreferences.Save(); Program.ApplyTheme(); Background = Brush("#F4F6FA"); Foreground = Brush("#17263C"); ShowShell(); };
-                choices.Children.Add(choice);
+                string value = values[i]; bool chosen = UiPreferences.Theme == value;
+                var content = new StackPanel();
+                content.Children.Add(ThemeSample(value));
+                var caption = new Grid { Margin = new Thickness(2, 12, 2, 0) }; caption.ColumnDefinitions.Add(new ColumnDefinition()); caption.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var words = new StackPanel(); var name = Text(labels[i], 14, "#17263C", true); name.Margin = new Thickness(0); words.Children.Add(name);
+                var note = Text(notes[i], 12, "#64738A"); note.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(note); caption.Children.Add(words);
+                if (chosen) { var check = Glyph("", 16, "#274CDB"); check.VerticalAlignment = VerticalAlignment.Top; Grid.SetColumn(check, 1); caption.Children.Add(check); }
+                content.Children.Add(caption);
+                var tile = new Button { Content = content, Padding = new Thickness(12), Margin = new Thickness(i == 0 ? 0 : 8, 0, i == 2 ? 0 : 8, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top, Background = Surface,
+                    BorderBrush = Brush(chosen ? "#274CDB" : "#E5EAF3"), BorderThickness = new Thickness(chosen ? 2 : 1), Cursor = System.Windows.Input.Cursors.Hand };
+                System.Windows.Automation.AutomationProperties.SetName(tile, labels[i] + " theme" + (chosen ? ", selected" : ""));
+                tile.Click += delegate { if (busy || UiPreferences.Theme == value) return; UiPreferences.Theme = value; UiPreferences.Save(); Program.ApplyTheme(); Background = Brush("#F4F6FA"); Foreground = Brush("#17263C"); ShowShell(); SetNotice("Theme changed to " + (value == "System" ? "match Windows." : value.ToLowerInvariant() + ".")); };
+                Grid.SetColumn(tile, i); tiles.Children.Add(tile);
             }
-            body.Children.Add(choices); page.Children.Add(Card(body));
-            var examples = Columns();
-            for (int i = 0; i < 2; i++)
+            page.Children.Add(tiles);
+            page.Children.Add(new Border { Height = 18 });
+            Group("More", SettingRow("Text size and contrast", "Windows controls these for every app, including this one.", null, RowAction("Open Windows settings ↗", delegate { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:easeofaccess-display") { UseShellExecute = true }); })));
+        }
+        // A small picture of the app in a theme. "System" shows light and dark side by side.
+        private static FrameworkElement ThemeSample(string theme)
+        {
+            Func<bool, FrameworkElement> half = dark =>
             {
-                bool dark = i == 1; var sample = new StackPanel { Margin = new Thickness(14) };
-                sample.Children.Add(new TextBlock { Text = "eero", FontFamily = new FontFamily("Segoe UI Light"), FontSize = 25, Foreground = dark ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.MidnightBlue });
-                sample.Children.Add(new TextBlock { Text = dark ? "Dark appearance" : "Light appearance", FontSize = 12, Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(dark ? "#B2B3BD" : "#646879")), Margin = new Thickness(0, 2, 0, 12) });
-                var mini = new Grid(); mini.ColumnDefinitions.Add(new ColumnDefinition()); mini.ColumnDefinitions.Add(new ColumnDefinition());
-                for (int j = 0; j < 2; j++) { var content = new StackPanel { Margin = new Thickness(12) }; content.Children.Add(new TextBlock { Text = j == 0 ? "Internet" : "Devices", FontSize = 12, Foreground = dark ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.MidnightBlue }); content.Children.Add(new Border { Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(dark ? "#82AAFF" : "#0057FF")), Width = j == 0 ? 65 : 24, Height = 6, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) }); var tile = new Border { Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(dark ? "#272729" : "#FFFFFF")), BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(dark ? "#3D3D42" : "#E1E1E5")), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Child = content, Margin = new Thickness(0, 0, j == 0 ? 8 : 0, 0) }; Grid.SetColumn(tile, j); mini.Children.Add(tile); }
-                sample.Children.Add(mini);
-                var frame = new Border { Child = sample, CornerRadius = new CornerRadius(8), Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(dark ? "#202022" : "#EEEEF1")), Margin = new Thickness(i == 0 ? 0 : 10, 0, i == 0 ? 10 : 0, 0), Height = 180 };
-                Grid.SetColumn(frame, i); examples.Children.Add(frame);
+                Func<string, SolidColorBrush> c = hex => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+                var sample = new StackPanel { Margin = new Thickness(12) };
+                sample.Children.Add(new TextBlock { Text = "eero", FontFamily = new FontFamily("Segoe UI Light"), FontSize = 20, Foreground = c(dark ? "#F3F3F5" : "#202445") });
+                var tile = new Border { Background = c(dark ? "#272729" : "#FFFFFF"), BorderBrush = c(dark ? "#3D3D42" : "#E1E1E5"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 10, 0, 0), Padding = new Thickness(10, 8, 10, 10) };
+                var lines = new StackPanel(); lines.Children.Add(new TextBlock { Text = "Internet", FontSize = 11, Foreground = c(dark ? "#F3F3F5" : "#202445") });
+                lines.Children.Add(new Border { Background = c(dark ? "#82AAFF" : "#0057FF"), Width = 54, Height = 5, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0) });
+                lines.Children.Add(new Border { Background = c(dark ? "#3D3D42" : "#E1E1E5"), Width = 80, Height = 5, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) });
+                tile.Child = lines; sample.Children.Add(tile);
+                return new Border { Background = c(dark ? "#1C1C1E" : "#F3F3F3"), Child = sample };
+            };
+            var frame = new Grid { Height = 130, ClipToBounds = true };
+            if (theme == "System")
+            {
+                frame.ColumnDefinitions.Add(new ColumnDefinition()); frame.ColumnDefinitions.Add(new ColumnDefinition());
+                var light = half(false); frame.Children.Add(light); var dark = half(true); Grid.SetColumn(dark, 1); frame.Children.Add(dark);
             }
-            page.Children.Add(examples);
+            else frame.Children.Add(half(theme == "Dark"));
+            return new Border { CornerRadius = new CornerRadius(8), Child = frame, BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#80808080")), BorderThickness = new Thickness(1), ClipToBounds = true };
         }
     }
 }

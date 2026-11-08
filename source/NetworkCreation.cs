@@ -34,17 +34,16 @@ namespace EeroDesktop
         private WiredNetworkSetup wiredSetup = new WiredNetworkSetup();
         private void CreateNetworkPage()
         {
-            Sub("Create a wired network");
-            page.Children.Add(Card(Text("Use a separate, unconfigured eero connected by Ethernet to a working DHCP internet connection. Review eero's agreements, create the network, then add the gateway by serial number. This flow has not been validated with an unconfigured eero. Keep your active network's gateway in place.", 15)));
+            Sub("Set up a brand-new eero network with a spare eero. Your current network keeps working.");
+            Group("Before you start",
+                InfoRow("You need", null, "A new or reset eero, plugged into your modem with an Ethernet cable. The modem must hand out addresses automatically (DHCP)."),
+                InfoRow("Good to know", null, "This hasn't been tested on every eero yet. If it fails, use the official eero app instead."));
             if (wiredSetup.CreatedUrl != null)
-            {
-                page.Children.Add(Text("A network was created. Continue adding its gateway; this will reuse the created network.", 15, "#64738A"));
-                page.Children.Add(Button("Continue adding gateway", async delegate { await ClaimCreatedGateway(); }));
-            }
+                Group("Finish setup", SettingRow("Add the gateway eero", "Your new network was created. This step links the eero to it.", "Network created", RowActionAsync("Continue", async delegate { await ClaimCreatedGateway(); })));
             else if (wiredSetup.CreationUncertain)
-                page.Children.Add(Text("The creation response was interrupted. Use Refresh to inspect your account before starting another creation. This window will not repeat the creation request.", 15, "#B5333D"));
+                Group("Finish setup", InfoRow("Check your account first", null, "The connection dropped while creating the network. Choose Refresh at the top right and look for the new network before trying again."));
             else
-                page.Children.Add(LocalButton("Review setup & agreements", delegate
+                Group("Steps", SettingRow("Create the network", "Enter the eero's serial number, read and accept eero's agreements, then choose a wifi name and password.", null, RowAction("Start", delegate
                 {
                     Edit("Gateway for new network", new[] { new Field("serial", "Serial number of the unconfigured gateway") }, async v =>
                     {
@@ -54,13 +53,13 @@ namespace EeroDesktop
                         object agreements = await api.Send("GET", "/2.2/consents/network?serial=" + Uri.EscapeDataString(serial));
                         AfterEditor(delegate { NetworkCreationEditor(serial, J.List(agreements)); });
                     }, "Continue");
-                }));
-            page.Children.Add(Section("Find nearby eeros", "Home/Add or replace eero/Find nearby eeros"));
-            page.Children.Add(Text("PPPoE/static WAN bootstrap, cellular activation and gateway replacement still require the official setup wizard. Existing-network ISP settings remain available under Advanced networking.", 13, "#64738A"));
+                })));
+            RelatedPagesFor("Home/Add or replace eero/Find nearby eeros");
+            page.Children.Add(Text("Internet that needs a PPPoE login or static IP, cellular service and gateway replacement still need the official eero app.", 13, "#64738A"));
         }
         private void NetworkCreationEditor(string serial, List<object> agreements)
         {
-            var fields = new List<Field> { new Field("name", "New wifi name"), new Field("password", "Wifi password", null, "password"), new Field("timezone", "IANA timezone (for example America/Chicago)", J.S(network, "timezone", "value")), new Field("location", "Gateway location") };
+            var fields = new List<Field> { new Field("name", "New wifi name"), new Field("password", "Wifi password", null, "password"), new Field("timezone", "Timezone", J.S(network, "timezone", "value")).Help("For example America/New_York, America/Chicago or Europe/London."), new Field("location", "Gateway location") };
             for (int i = 0; i < agreements.Count; i++)
             {
                 object agreement = agreements[i];

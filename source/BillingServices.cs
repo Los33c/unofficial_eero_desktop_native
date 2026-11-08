@@ -41,28 +41,36 @@ namespace EeroDesktop
         }
         private void BillingOverview()
         {
-            Sub("Billing & subscription status"); object customer; featureData.TryGetValue("billing_customer", out customer);
-            if (preview) customer = J.Obj("plan", "eero Plus", "status", "Active", "payment_channel", "eero", "renewal", "See billing service for your next renewal date and price");
-            ObjectCards(customer, "Current subscription");
-            ActionRow(Button("Refresh benefits / restore access", RefreshBilling), Button("Manage subscription & payment method", async delegate { await OpenPaymentService("MANAGE_SUBSCRIPTION"); }), Button("Purchase history", async delegate { await OpenPaymentService("MANAGE_PURCHASES"); }));
-            page.Children.Add(Section("Plans, offers & referrals", "Settings/Account settings/Subscriptions/Offers & referrals"));
-            page.Children.Add(Text("A billing-window return does not prove that a purchase succeeded. Refresh checks your current entitlement with eero. Purchases made through Google Play or another provider remain managed by that billing provider.", 13, "#64738A"));
+            Sub("Your eero plan, how you pay for it and what you've bought.");
+            object customer; featureData.TryGetValue("billing_customer", out customer);
+            if (preview) customer = J.Obj("plan", "eero Plus", "status", "Active", "payment_channel", "eero");
+            string plan = J.First(customer, "plan", "plan_name", "name"), status = J.S(customer, "status"), channel = J.S(customer, "payment_channel");
+            Group("Your plan",
+                SettingRow("Plan", status.Length > 0 ? Friendly(status) : null, plan.NullIfEmpty() ?? "No plan reported",
+                    RowActionAsync("Manage ↗", async delegate { await OpenPaymentService("MANAGE_SUBSCRIPTION"); })),
+                channel.Length > 0 ? InfoRow("Billed through", channel == "eero" ? "eero" : Friendly(channel), channel == "eero" ? "Change your payment method with Manage." : "Manage this subscription with that store or provider.") : null,
+                SettingRow("Refresh status", "Bought or cancelled something? Refresh to update what this app shows.", null, RowActionAsync("Refresh", RefreshBilling)));
+            Group("Purchases",
+                SettingRow("Purchase history", "Receipts and past purchases. Opens eero's payment service.", null, RowActionAsync("View ↗", async delegate { await OpenPaymentService("MANAGE_PURCHASES"); })));
+            RelatedPagesFor("Settings/Account settings/Subscriptions/Offers & referrals");
+            TechnicalDetails(customer);
         }
         private void OrganizationBilling()
         {
-            Sub("Business billing");
-            page.Children.Add(Text("Manage the payment account for your eero business organization. Access requires the appropriate organization role.", 15));
-            ActionRow(Button("Manage business payment account", async delegate
-            {
-                object result = await Read("/2.2/organizations/self/payment_account/management_url");
-                OpenBillingWindow(J.S(result, "external_payment_account_management_url"));
-            }), Button("Set up business payment account", async delegate
-            {
-                if (preview) throw new InvalidOperationException("Sample mode does not create payment accounts.");
-                if (!Confirm("Start payment-account onboarding for your eero business organization? Review the provider's requirements before submitting its form.")) return;
-                object result = await api.Send("POST", "/2.2/organizations/self/payment_account");
-                OpenBillingWindow(J.S(result, "external_payment_account_onboard_url"));
-            }));
+            Sub("The payment account for your eero business organization. You need an organization role that allows billing.");
+            Group(null,
+                SettingRow("Manage payment account", "Update the payment method and details for an existing business account.", null, RowActionAsync("Manage ↗", async delegate
+                {
+                    object result = await Read("/2.2/organizations/self/payment_account/management_url");
+                    OpenBillingWindow(J.S(result, "external_payment_account_management_url"));
+                })),
+                SettingRow("Set up a payment account", "Only if your organization doesn't have one yet. Opens the payment provider's sign-up form.", null, RowActionAsync("Set up ↗", async delegate
+                {
+                    if (preview) throw new InvalidOperationException("Sample mode does not create payment accounts.");
+                    if (!Confirm("Start payment-account setup for your eero business organization? Review the provider's requirements before submitting its form.")) return;
+                    object result = await api.Send("POST", "/2.2/organizations/self/payment_account");
+                    OpenBillingWindow(J.S(result, "external_payment_account_onboard_url"));
+                })));
         }
     }
 }

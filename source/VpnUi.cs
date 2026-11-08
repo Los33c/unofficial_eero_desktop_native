@@ -19,22 +19,26 @@ namespace EeroDesktop
         private void VpnControls()
         {
             object state = VpnState(); string scope = VpnScope;
-            var summary = new StackPanel(); summary.Children.Add(Text(preview ? "Disconnected · sample" : WindowsVpn.Status(scope), 22, "#17263C", true));
-            summary.Children.Add(Text("Region: " + (J.S(state, "region_label").NullIfEmpty() ?? "Choose a location"), 15));
-            summary.Children.Add(Text("Windows device: " + (J.S(state, "nickname").NullIfEmpty() ?? "Not registered"), 14, "#64738A"));
-            if (J.S(state, "verified_utc").Length > 0) summary.Children.Add(Text("Last verified handshake: " + J.S(state, "verified_utc"), 12, "#64738A"));
-            page.Children.Add(Card(summary));
-            ActionRow(Button("Connect VPN", ConnectGuardian), Button("Disconnect VPN", DisconnectGuardian), LocalButton("Refresh VPN status", RenderPage));
-            ActionRow(Button("Register this Windows device", RegisterGuardian), Button("Choose VPN location", ChooseGuardianRegion), Button("Manage VPN devices", GuardianDevices));
-            page.Children.Add(Button("Install Windows VPN component", async delegate
+            bool registered = J.S(state, "pet").Length > 0, installed = !preview && WindowsVpn.Installed, located = J.S(state, "region_label").Length > 0;
+            string status = preview ? "Disconnected · sample" : WindowsVpn.Status(scope);
+            var install = RowActionAsync("Install", async delegate
             {
                 if (preview) throw new InvalidOperationException("Sample mode does not install software.");
                 object availability = await LoadGuardianAvailability();
                 if (availability is ApiException || !(J.Get(availability, "seats_available") is bool)) throw new InvalidOperationException(VpnContracts.EligibilityMessage(availability));
-                if (!Confirm("Download and run the digitally signed official WireGuard installer? Windows will ask for administrator permission. After installation, return here and choose Connect VPN.")) return;
+                if (!Confirm("Download and run the digitally signed official WireGuard installer? Windows will ask for administrator permission. After installation, return here and choose Connect.")) return;
                 await WindowsVpn.InstallComponent(); SetNotice("Windows VPN component installed. Choose a location and connect."); RenderPage();
-            }));
-            page.Children.Add(Text("The official WireGuard component supplies the Windows tunnel, DNS protection and full-tunnel traffic blocking. Connect and Disconnect ask for Windows administrator permission. Closing this app leaves a connected VPN running; use Disconnect VPN to turn it off.", 13, "#64738A"));
+            });
+            Group("This PC",
+                SettingRow("VPN connection", "Connect and Disconnect ask for Windows administrator permission. Closing this app leaves the VPN running.", status,
+                    RowActionAsync("Connect", ConnectGuardian), RowActionAsync("Disconnect", DisconnectGuardian), RowAction("Refresh", RenderPage)),
+                SettingRow("VPN location", "Where your traffic appears to come from.", J.S(state, "region_label").NullIfEmpty() ?? "Not chosen", RowActionAsync("Change", ChooseGuardianRegion)),
+                J.S(state, "verified_utc").Length > 0 ? InfoRow("Last verified", J.S(state, "verified_utc"), "The last time the VPN tunnel confirmed it was working.") : null);
+            Group("Set up in order",
+                SettingRow("1. Register this PC", "Uses one of your plan's VPN device slots.", registered ? "✓ " + (J.S(state, "nickname").NullIfEmpty() ?? "Registered") : "Not registered", RowActionAsync(registered ? "Register again" : "Register", RegisterGuardian)),
+                SettingRow("2. Install the Windows VPN component", "The official WireGuard app that creates the VPN tunnel. Needs administrator permission.", installed ? "✓ Installed" : preview ? "Sample" : "Not installed", install),
+                SettingRow("3. Choose a location, then Connect", "Pick a location above, then choose Connect.", located ? "✓ Done" : "Not done", RowActionAsync("Choose", ChooseGuardianRegion)));
+            Group("Devices", SettingRow("Your VPN devices", "See and remove devices that use your plan's VPN slots.", null, RowActionAsync("Manage", GuardianDevices)));
         }
         private async Task<object> LoadGuardianAvailability()
         {

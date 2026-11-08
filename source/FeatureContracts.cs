@@ -66,8 +66,8 @@ namespace EeroDesktop
         }
         public static Dictionary<string, object> Dhcp(string mode, string subnet, string mask, string first, string last, bool randomization)
         {
-            if (!new[] { "automatic", "custom", "bridge" }.Contains(mode)) throw new ArgumentException("Choose Automatic, Manual, or Bridge.");
-            var result = J.Obj("connection", J.Obj("mode", mode == "bridge" ? "bridged" : "nat"), "nat_port_randomization", randomization);
+            if (!new[] { "automatic", "custom", "bridge", "passthrough" }.Contains(mode)) throw new ArgumentException("Choose Automatic, Manual, Bridge, or IP Passthrough.");
+            var result = J.Obj("connection", J.Obj("mode", mode == "bridge" ? "bridged" : mode == "passthrough" ? "ipPassthrough" : "nat"), "nat_port_randomization", randomization);
             var dhcp = J.Obj("mode", mode == "custom" ? "custom" : "automatic");
             if (mode == "custom")
             {
@@ -78,7 +78,7 @@ namespace EeroDesktop
                 if ((begin & netmask) != network || (end & netmask) != network || begin <= network || end >= (network | inverse) || begin > end) throw new ArgumentException("The DHCP range must be ordered and inside the subnet, excluding network and broadcast addresses.");
                 dhcp["custom"] = J.Obj("subnet_ip", s, "subnet_mask", m, "start_ip", f, "end_ip", l);
             }
-            if (mode != "bridge") result["dhcp"] = dhcp;
+            if (mode != "bridge" && mode != "passthrough") result["dhcp"] = dhcp;
             return result;
         }
         public static string Domain(string value)
@@ -106,42 +106,42 @@ namespace EeroDesktop
     public static class FeatureCatalog
     {
         public static readonly FeatureEntry[] Entries = {
-            new FeatureEntry("Home/Internet", "Internet status, speed tests, WAN and backup connectivity", "TabBarMode, HomeViewModel"),
-            new FeatureEntry("Home/eeros", "Node details, status lights, connections and restarts", "IEeroService"),
+            new FeatureEntry("Home/Internet", "Connection status, speed and speed test history", "TabBarMode, HomeViewModel"),
+            new FeatureEntry("Home/eeros", "Your eeros, their lights, ports and restarts", "IEeroService"),
             new FeatureEntry("Home/Profiles", "Create profiles, assign devices, pause access and schedule pauses", "ProfileUpdateRequest, ScheduledPause"),
-            new FeatureEntry("Home/Security & privacy", "Advanced Security, content filters, ad blocking and website controls", "DnsPolicySlug, INetworkService"),
-            new FeatureEntry("Home/Security & privacy/Content filters", "Unified content filters for additional wifi subnets", "SubnetContentFiltersRequest"),
-            new FeatureEntry("Home/Add or replace eero", "Add by serial number, discover nearby eeros and configure automatic setup", "IEeroService.addEeroWithSerial"),
-            new FeatureEntry("Home/Add or replace eero/Find nearby eeros", "Native Bluetooth discovery and read-only eero identity checks", "EeroBleManagerLive, EeroUuids"),
-            new FeatureEntry("Home/Add or replace eero/Automatic setup", "Cloud-discovered eeros and automatic setup preferences", "getAutoDiscoveredEeros, SetAutoSetupMode"),
-            new FeatureEntry("Home/Add or replace eero/Create a network", "Create a wired DHCP network and claim its gateway by serial", "CreateNetworkRequest, IEeroService.addEeroWithSerial", "Not validated on unconfigured hardware; Bluetooth write provisioning and gateway replacement are incomplete."),
-            new FeatureEntry("Home/eeros/Placement tests", "Run cloud placement tests and review eero signal ratings", "runPlacementTest, PlacementResult"),
-            new FeatureEntry("Home/Security & privacy/VPN", "Guardian device registration, locations, devices and Windows VPN controls", "GuardianVpnPetRequest, Guardian Connect API, WireGuard Windows"),
+            new FeatureEntry("Home/Security & privacy", "Threat and ad blocking, content filters and website rules", "DnsPolicySlug, INetworkService"),
+            new FeatureEntry("Home/Security & privacy/Content filters", "Separate filters for each extra wifi network", "SubnetContentFiltersRequest"),
+            new FeatureEntry("Home/Add or replace eero", "Add another eero to grow your wifi", "IEeroService.addEeroWithSerial"),
+            new FeatureEntry("Home/Add or replace eero/Find nearby eeros", "Use Bluetooth to find new eeros nearby", "EeroBleManagerLive, EeroUuids"),
+            new FeatureEntry("Home/Add or replace eero/Automatic setup", "Let new eeros join your network by themselves", "getAutoDiscoveredEeros, SetAutoSetupMode"),
+            new FeatureEntry("Home/Add or replace eero/Create a network", "Set up a brand-new network with a spare eero", "CreateNetworkRequest, IEeroService.addEeroWithSerial", "Not validated on unconfigured hardware; Bluetooth write provisioning and gateway replacement are incomplete."),
+            new FeatureEntry("Home/eeros/Placement tests", "Check whether each eero is in a good spot", "runPlacementTest, PlacementResult"),
+            new FeatureEntry("Home/Security & privacy/VPN", "Guardian VPN for this PC, if your plan includes it", "GuardianVpnPetRequest, Guardian Connect API, WireGuard Windows"),
             new FeatureEntry("Devices/Blocked devices", "Review and unblock devices", "NetworkService.blockDevice, unblockDevice"),
-            new FeatureEntry("Activity/Data usage", "Network data usage and device breakdown", "IDataUsageService"),
-            new FeatureEntry("Activity/Security activity", "Threat and content-filter activity", "IInsightsService"),
-            new FeatureEntry("Activity/Network events", "Recent network events", "INetworkService.getNetworkEvents"),
+            new FeatureEntry("Activity/Data usage", "How much data your network used, day by day", "IDataUsageService"),
+            new FeatureEntry("Activity/Security activity", "What eero blocked for you: threats, ads and websites", "IInsightsService"),
+            new FeatureEntry("Activity/Network events", "Devices joining, software updates, pauses and more", "INetworkService.getNetworkEvents"),
             new FeatureEntry("Settings/Wifi name & password", "View, change, copy, and share wifi details as a QR code", "NetworkResources.password"),
             new FeatureEntry("Settings/Guest wifi network", "Guest network access, credentials and QR sharing", "GuestNetwork, GuestResources"),
             new FeatureEntry("Settings/Additional wifi networks", "Additional SSIDs, guest and IoT access, bandwidth limits and subnet filters", "SubnetConfig"),
             new FeatureEntry("Settings/Business guest wifi", "Existing guest portal branding, session duration and visitor fields", "CaptivePortalConfigurationRequest"),
             new FeatureEntry("Settings/Nickname & location", "Network nickname and timezone", "NetworkService.updateBusinessNameOrNetworkNickname"),
             new FeatureEntry("Settings/Advanced networking", "DHCP, DNS, reservations, firewall, wireless and smart-home options", "SettingsRoute, INetworkService"),
-            new FeatureEntry("Settings/Advanced networking/Internet connection", "WAN address, DHCP, static IP and PPPoE status", "Network.ip_settings, NetworkPppoeConfig"),
-            new FeatureEntry("Settings/Advanced networking/Internet connection/ISP settings", "Existing-network PPPoE credentials and ISP VLAN tagging", "NetworkPppoeConfig, Network.vlan"),
-            new FeatureEntry("Settings/Advanced networking/DHCP & NAT", "Automatic/manual addressing, bridge mode and NAT port randomization", "DhcpConfigurationRequest"),
-            new FeatureEntry("Settings/Advanced networking/DNS", "ISP or custom DNS and local DNS caching", "Dns, HostInfoList"),
-            new FeatureEntry("Settings/Advanced networking/DNS/DNS performance", "Compare resolver latency and review gateway DNS test results", "DnsPerfTestRequest, NetworkService.runDnsPerfTest"),
+            new FeatureEntry("Settings/Advanced networking/Internet connection", "How eero gets its internet address: automatic or a static IP", "Network.ip_settings, NetworkPppoeConfig"),
+            new FeatureEntry("Settings/Advanced networking/Internet connection/ISP settings", "PPPoE login and VLAN ID, only if your ISP gave you one", "NetworkPppoeConfig, Network.vlan"),
+            new FeatureEntry("Settings/Advanced networking/DHCP & NAT", "How devices get addresses: automatic, manual range, bridge or passthrough", "DhcpConfigurationRequest"),
+            new FeatureEntry("Settings/Advanced networking/DNS", "Automatic or custom DNS servers and local DNS caching", "Dns, HostInfoList"),
+            new FeatureEntry("Settings/Advanced networking/DNS/DNS performance", "Test how quickly your DNS servers respond", "DnsPerfTestRequest, NetworkService.runDnsPerfTest"),
             new FeatureEntry("Settings/Advanced networking/Reservations & port forwarding", "IPv4 reservations, port mappings and IPv6 firewall rules", "NetRules, NetworkReservation, NetworkForward"),
             new FeatureEntry("Settings/Advanced networking/IPv6", "Enable or disable upstream IPv6", "Network.ipv6_upstream"),
             new FeatureEntry("Settings/Advanced networking/UPnP", "Automatic port mapping", "Network.upnp"),
             new FeatureEntry("Settings/Advanced networking/Wireless settings", "WPA3, client steering, optimization, compatibility and MLO", "Network, MultiLinkOperationModeRequest"),
-            new FeatureEntry("Settings/Advanced networking/Thread", "Thread network and credential syncing", "UpdateThreadNetworkRequest"),
-            new FeatureEntry("Settings/Advanced networking/Dynamic DNS", "eero DDNS access and hostname", "INetworkService.ddnsEnable, ddnsDisable"),
-            new FeatureEntry("Settings/Advanced networking/Power saving", "Power optimization and scheduled power saving", "PowerOptimizationRequest, PowerSavingScheduleRequest"),
-            new FeatureEntry("Settings/Advanced networking/Internet backup", "Backup access points and connectivity tests", "AddBackupNetworkRequest, BackupInternetEnabledRequest"),
-            new FeatureEntry("Settings/Advanced networking/Multi-WAN", "WAN links, failover and secondary-WAN device access", "INetworkService.coGetWanLinks"),
-            new FeatureEntry("Settings/Advanced networking/Multiple static IPs", "Public LAN and NAT public-address ranges", "MultiStaticIpRequest"),
+            new FeatureEntry("Settings/Advanced networking/Thread", "Smart-home network for Matter and Thread devices", "UpdateThreadNetworkRequest"),
+            new FeatureEntry("Settings/Advanced networking/Dynamic DNS", "A hostname that follows your public IP for remote access", "INetworkService.ddnsEnable, ddnsDisable"),
+            new FeatureEntry("Settings/Advanced networking/Power saving", "Lower eero power use, always or on a schedule", "PowerOptimizationRequest, PowerSavingScheduleRequest"),
+            new FeatureEntry("Settings/Advanced networking/Internet backup", "Stay online with a hotspot or backup wifi when your internet drops", "AddBackupNetworkRequest, BackupInternetEnabledRequest"),
+            new FeatureEntry("Settings/Advanced networking/Multi-WAN", "Use more than one internet connection", "INetworkService.coGetWanLinks"),
+            new FeatureEntry("Settings/Advanced networking/Multiple static IPs", "Use extra public IP addresses from your ISP", "MultiStaticIpRequest"),
             new FeatureEntry("Settings/User permissions", "Network members, admin invitations and revocation", "CreateInviteRequest, INetworkService.removeAdmin"),
             new FeatureEntry("Settings/User permissions/Join a network", "Review, accept or decline an eero invitation", "InviteQueryRequest, ExternalInviteRequest"),
             new FeatureEntry("Settings/User permissions/Incoming access invitations", "Review, accept or decline account access invitations", "MemberPromotionResponse, PromotionInviteRequest"),
@@ -156,27 +156,36 @@ namespace EeroDesktop
             new FeatureEntry("Settings/Notifications/Windows notifications", "Windows startup, background alerts and missed-update tracking", "Windows background notifications"),
             new FeatureEntry("Settings/Account settings", "Account details, name, verified email/phone changes and email preferences", "IUserService"),
             new FeatureEntry("Settings/Account settings/Subscriptions", "Subscription status, software-key activation and partner benefits", "IPremiumService, ActivateLicenseKeyRequestBody"),
-            new FeatureEntry("Settings/Account settings/Subscriptions/Redeem a license key", "Validate a software key, review renewal and activate for a network", "ValidateLicenseKeyRequestBody, ActivateLicenseKeyRequestBody"),
-            new FeatureEntry("Settings/Account settings/Subscriptions/Partner benefits", "1Password and Malwarebytes codes, benefit status and VPN seats", "IPremiumService"),
-            new FeatureEntry("Settings/Account settings/Subscriptions/Manage subscriptions & purchases", "Official eero payment service using a temporary account token", "TemporaryExternalToken, TargetPage"),
-            new FeatureEntry("Settings/Account settings/Subscriptions/Offers & referrals", "Eligible plan offers, referral links, referral email and referral status", "EeroPlusOfferRequest, SubscriptionReferralRequest"),
-            new FeatureEntry("Settings/Account settings/Subscriptions/Billing & status", "Refresh benefits, payment methods and purchase history", "IPremiumService.getCustomer, TargetPage"),
-            new FeatureEntry("Settings/Account settings/Subscriptions/Business billing", "Business payment-account management and onboarding", "PaymentAccountManagementResponse, PaymentAccountOnboardingResponse"),
-            new FeatureEntry("Home/Security & privacy/Identity protection", "Identity protection activation, digital-footprint scans and email verification", "DigitalFootprintScanRequest, DigitalFootprintVerifyCodeRequest"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Redeem a license key", "Activate a plan with a key from eero or your provider", "ValidateLicenseKeyRequestBody, ActivateLicenseKeyRequestBody"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Partner benefits", "1Password, Malwarebytes and VPN included with eero Plus", "IPremiumService"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Manage subscriptions & purchases", "Change or cancel your plan, see purchases and add-ons", "TemporaryExternalToken, TargetPage"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Offers & referrals", "Plans you can get, current offers and referral links", "EeroPlusOfferRequest, SubscriptionReferralRequest"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Billing & status", "Your plan, how you pay and past purchases", "IPremiumService.getCustomer, TargetPage"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Business billing", "Payment account for business organizations", "PaymentAccountManagementResponse, PaymentAccountOnboardingResponse"),
+            new FeatureEntry("Home/Security & privacy/Identity protection", "Watch for your email in data breaches", "DigitalFootprintScanRequest, DigitalFootprintVerifyCodeRequest"),
             new FeatureEntry("Settings/Connected services", "Amazon, eero Built-in and connected-service status", "Network.proxied_nodes, simple_setup"),
             new FeatureEntry("Settings/Connected services/Connected device setup", "Review and configure per-vendor device setup permissions", "SimpleSetupNetworkConfiguration"),
             new FeatureEntry("Settings/Connected services/Amazon connected home", "Linked-account status, Zigbee discovery and account unlinking", "runZigbeeDeviceDiscovery, unlinkAmazonAccount"),
-            new FeatureEntry("Settings/Connected services/Accessories & cellular", "Accessory setup status, details, removal and phone-line associations", "AccessoryStatus, Accessory, SipConfigAssociation"),
+            new FeatureEntry("Settings/Connected services/Accessories & cellular", "Cellular backup, phone adapters and other add-on hardware", "AccessoryStatus, Accessory, SipConfigAssociation"),
             new FeatureEntry("Settings/Business guest wifi/eero Insight", "Open the official business management portal", "SettingsViewModel.setupEeroInsight"),
             new FeatureEntry("Settings/Network management", "Network switching, ownership transfer and removal", "NetworkResources.transfer, deleteNetwork"),
             new FeatureEntry("Settings/Network management/Pending transfers", "Accept or decline incoming network transfers", "PendingTransfersData, acceptNetworkTransfer, denyNetworkTransfer"),
             new FeatureEntry("Settings/Network management/Outgoing transfer", "Review, resend or cancel a pending ownership invitation", "getTransferNetworkInvite, resendTransferNetwork"),
             new FeatureEntry("Settings/About", "Version, sources, capabilities and compatibility information", "Feature inventory"),
-            new FeatureEntry("Home/Chat", "Streaming eero chat, recommendations and permission requests", "IConversationsService, ConversationStreamingService"),
-            new FeatureEntry("Help/Support history", "Read and continue previous eero conversations", "ConversationsResponse, ConversationResponse"),
-            new FeatureEntry("Help/Contact support", "Account-specific chat, help links and contact information", "SupportInfo, SupportInfoItem, TYPE.CHAT"),
-            new FeatureEntry("Help", "Official support, support details and feature availability", "TabBarMode.Troubleshooting"),
-            new FeatureEntry("Help/Service availability", "Account, hardware and service requirements", "Service integrations", "Full Bluetooth provisioning and gateway replacement are unavailable. Amazon sign-in requires an existing eero account using the same Amazon login; no developer account or Business subscription is needed. Email/phone sign-in remains available for accounts that use it. Purchases remain managed by their billing provider. Guardian VPN needs an eligible account, the Windows WireGuard component and administrator approval.")
+            new FeatureEntry("Home/Chat", "Ask eero about your network", "IConversationsService, ConversationStreamingService"),
+            new FeatureEntry("Help/Support history", "Read or continue earlier chats with eero", "ConversationsResponse, ConversationResponse"),
+            new FeatureEntry("Help/Contact support", "Phone, email or chat options for your account", "SupportInfo, SupportInfoItem, TYPE.CHAT"),
+            new FeatureEntry("Help", "Fix a problem, ask eero, or contact a person", "TabBarMode.Troubleshooting"),
+            new FeatureEntry("Home/Add or replace eero/Setup tools", "Extra tools for adding or replacing eeros", "pendingEeros, packagedEeros, checkOui, setNetworkToDefaultChannel, notifyNodeSwap, getPlacementTestResult"),
+            new FeatureEntry("Activity/Usage details", "Usage and blocking for one eero, profile or device", "IInsightsStatsService"),
+            new FeatureEntry("Settings/Advanced networking/Network flags", "Support-only switches. Change only if eero support asks", "INetworkService.updateFlag"),
+            new FeatureEntry("Settings/Network management/Organization & community", "For business, building and provider-managed networks", "getCommunity, getCobranding, getManagedNetworks, ICommunitiesService, updateNetworkType"),
+            new FeatureEntry("Settings/Account settings/Trusted certificates", "Add, replace or remove certificates trusted by your account", "IUserService.getTrust, addTrust, updateTrust, deleteTrust"),
+            new FeatureEntry("Settings/Account settings/Account data", "Email verification, privacy contact and technical account info", "getDataControllerInfo, getCountryCodes, getAppConfiguration, IDirectedIdService, resendEmailVerify"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Entitlements & trials", "What your plan includes and upgrades you can try", "IEntitledFeatures, createAutoSubscription"),
+            new FeatureEntry("Settings/Account settings/Subscriptions/Partner offers", "Products from eero partners", "IPartnerUpsell, createEncryptMeAccount"),
+            new FeatureEntry("Help/Report an issue", "Send eero a description of a problem and a screenshot", "IZendeskService.createIssue"),
+            new FeatureEntry("Help/Service availability", "What works here and what needs the official eero app", "Service integrations", "Full Bluetooth provisioning and gateway replacement are unavailable. Amazon sign-in requires an existing eero account using the same Amazon login; no developer account or Business subscription is needed. Email/phone sign-in remains available for accounts that use it. Purchases remain managed by their billing provider. Guardian VPN needs an eligible account, the Windows WireGuard component and administrator approval.")
         };
         public static string Parent(string path) { int i = path.LastIndexOf('/'); return i < 0 ? "Home" : path.Substring(0, i); }
         public static string Root(string path) { return path.Split('/')[0]; }

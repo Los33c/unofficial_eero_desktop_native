@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace EeroDesktop
@@ -11,23 +12,28 @@ namespace EeroDesktop
     {
         private void AdditionalWifiPage(object data)
         {
-            Sub("Additional wifi networks");
-            foreach (object raw in Entries(data, "subnets", "configurations"))
+            Sub("Extra wifi networks with their own name and password, for example to keep smart-home devices or kids' devices separate. How many you can add depends on your eero hardware and plan.");
+            var subnets = Entries(data, "subnets", "configurations"); var rows = new List<UIElement>();
+            foreach (object raw in subnets)
             {
-                object subnet = raw; var p = new StackPanel(); Details(p, subnet, 0); var row = new WrapPanel();
-                row.Children.Add(LocalButton("Edit wifi network", delegate { SubnetEdit(subnet); }));
-                row.Children.Add(Button("Content filters", async delegate { await EditSubnetFilters(subnet); }));
-                string type = J.S(subnet, "subnet_type");
-                if (type == "A" || type == "B") row.Children.Add(Button("Delete additional network", async delegate { if (!Confirm("Delete this additional wifi network? Connected devices will disconnect.")) return; await Change("DELETE", FeatureUrl("subnets_config/" + type), null, false, "Additional wifi network deleted."); }));
-                p.Children.Add(row); page.Children.Add(Card(p));
+                object subnet = raw; string type = J.S(subnet, "subnet_type");
+                int rate; bool limited = Int32.TryParse(J.S(subnet, "rate_limit_pct"), out rate) && rate < 100;
+                string summary = (Friendly(J.S(subnet, "subnet_kind")).NullIfEmpty() ?? "Wifi network") + " · " + (J.Get(subnet, "enabled") is bool && !J.B(subnet, "enabled") ? "Off" : "On") + (J.B(subnet, "open_network") ? " · No password" : "") + (J.Get(subnet, "wan_access") is bool && !J.B(subnet, "wan_access") ? " · No internet" : "") + (limited ? " · " + rate + "% bandwidth" : "");
+                var actions = new List<Button> { RowAction("Edit", delegate { SubnetEdit(subnet); }), RowActionAsync("Content filters", async delegate { await EditSubnetFilters(subnet); }) };
+                if (type == "A" || type == "B") actions.Add(RowActionAsync("Delete", async delegate { if (!Confirm("Delete this additional wifi network? Connected devices will disconnect.")) return; await Change("DELETE", FeatureUrl("subnets_config/" + type), null, false, "Additional wifi network deleted."); }, true));
+                rows.Add(SettingRow(J.S(subnet, "name").NullIfEmpty() ?? "Additional network", summary, null, actions.ToArray()));
             }
-            page.Children.Add(LocalButton("Add additional wifi network", delegate { SubnetEdit(null); }));
-            page.Children.Add(Text("The service enforces the number of SSIDs, available subnet types and subscription requirements for your hardware.", 13, "#64738A"));
+            if (rows.Count == 0) rows.Add(InfoRow("No additional networks yet", null, "Add one to keep smart-home, kids' or work devices on their own wifi."));
+            var used = new HashSet<string>(subnets.Select(s => J.S(s, "subnet_type")));
+            string free = new[] { "A", "B" }.FirstOrDefault(s => !used.Contains(s));
+            var add = RowAction("Add", delegate { SubnetEdit(null, free); }); add.IsEnabled = free != null;
+            rows.Add(SettingRow("Add a wifi network", free != null ? "Choose a name, password and what it's for." : "Both additional network slots are in use. Delete one to add another.", null, add));
+            Group(null, rows.ToArray());
         }
-        private void SubnetEdit(object subnet)
+        private void SubnetEdit(object subnet, string slot = "A")
         {
-            var fields = new List<Field> { new Field("name", "Wifi name", J.S(subnet, "name")), new Field("password", "New password (blank keeps current when editing)", null, "password"), new Field("enabled", "Enabled", subnet == null || J.B(subnet, "enabled"), "bool"), new Field("open_network", "Open network without a password", J.B(subnet, "open_network"), "bool"), new Field("wan_access", "Allow internet access", subnet == null || J.B(subnet, "wan_access"), "bool"), new Field("rate", "Bandwidth limit percentage (1–100)", J.S(subnet, "rate_limit_pct").NullIfEmpty() ?? "100") };
-            if (subnet == null) { fields.Add(new Field("type", "Additional wifi slot", "A", "choice", "A", "B")); fields.Add(new Field("kind", "Purpose", "IoT", "choice", "IoT", "Business", "Kids", "Guest")); }
+            var fields = new List<Field> { new Field("name", "Wifi name", J.S(subnet, "name")), new Field("password", subnet == null ? "Password" : "New password", null, "password").Help(subnet == null ? "8–63 characters." : "Leave blank to keep the current password.").When("open_network", "False"), new Field("enabled", "Turn this network on", subnet == null || J.B(subnet, "enabled"), "bool"), new Field("open_network", "No password (open network)", J.B(subnet, "open_network"), "bool").Help("Anyone nearby could join. Use only for a captive portal or guest kiosk."), new Field("wan_access", "Allow internet access", subnet == null || J.B(subnet, "wan_access"), "bool").Help("Turn off for local-only devices such as some cameras."), new Field("rate", "Bandwidth limit (percent of your connection)", J.S(subnet, "rate_limit_pct").NullIfEmpty() ?? "100").Help("100 means no limit.") };
+            if (subnet == null) { fields.Add(new Field("type", "Slot", slot ?? "A", "hidden")); fields.Add(new Field("kind", "What is it for?", "IoT", "choice", "IoT", "Kids", "Business", "Guest").Help("IoT is for smart-home devices like plugs, cameras and speakers.")); }
             Edit(subnet == null ? "Add additional wifi" : "Edit additional wifi", fields, async v =>
             {
                 ValidateSsid(V(v, "name")); int rate; if (!Int32.TryParse(V(v, "rate"), out rate) || rate < 1 || rate > 100) throw new ArgumentException("Enter a bandwidth percentage between 1 and 100.");
@@ -43,12 +49,16 @@ namespace EeroDesktop
         }
         private void SubnetFiltersPage(object data)
         {
-            Sub("Unified content filters by wifi network");
-            foreach (object raw in Entries(data, "subnets"))
+            Sub("Separate content filters for each extra wifi network, for example stricter filters on a kids' network. Your main network uses Security & privacy.");
+            var rows = new List<UIElement>();
+            foreach (object raw in Entries(data, "subnets", "configurations"))
             {
-                object subnet = raw; var p = new StackPanel(); p.Children.Add(Text(J.First(subnet, "name", "subnet_type"), 20, "#17263C", true)); p.Children.Add(Button("Edit content filters", async delegate { await EditSubnetFilters(subnet); })); page.Children.Add(Card(p));
+                object subnet = raw;
+                rows.Add(SettingRow(J.First(subnet, "name", "subnet_type").NullIfEmpty() ?? "Wifi network", Friendly(J.S(subnet, "subnet_kind")).NullIfEmpty(), null, RowActionAsync("Edit filters", async delegate { await EditSubnetFilters(subnet); })));
             }
-            if (data != null && Entries(data, "subnets").Count == 0) page.Children.Add(Text("No configurable subnets were returned.", 14, "#64738A"));
+            if (rows.Count == 0) rows.Add(InfoRow("No extra wifi networks", null, data == null ? "eero hasn't returned your wifi networks. Choose Refresh at the top right to try again." : "Add an additional wifi network first, then set its filters here."));
+            Group(null, rows.ToArray());
+            RelatedPagesFor("Settings/Additional wifi networks", "Home/Security & privacy");
         }
         private async Task EditSubnetFilters(object subnet)
         {
@@ -67,41 +77,66 @@ namespace EeroDesktop
         }
         private void MultiStaticPage(object data)
         {
-            Sub("Multiple static IPs · requires ISP support"); ObjectCards(data);
-            page.Children.Add(LocalButton("Configure static public IPs", delegate
+            Sub("Use a block of extra public IP addresses from your internet provider. This only works if your ISP gives you more than one static IP.");
+            object lan = J.Get(data, "multistaticip_settings"), nat = J.Get(data, "multistaticip_settings_nat_portfwd");
+            bool enabled = J.B(data, "enabled"); string type = J.S(data, "type").NullIfEmpty() ?? "PublicLAN";
+            const string lanLabel = "Public addresses on devices", natLabel = "Port forwarding (NAT)";
+            Group(null,
+                SettingRow("Multiple static IPs", "Public addresses on devices gives each device its own public IP. Port forwarding keeps devices private and forwards the extra IPs.", data == null ? "Not reported" : enabled ? "On · " + Friendly(type) : "Off", RowAction("Change", delegate
             {
-                object lan = J.Get(data, "multistaticip_settings"), nat = J.Get(data, "multistaticip_settings_nat_portfwd");
-                Edit("Multiple static IPs", new[] { new Field("enabled", "Enable multiple static IPs", J.B(data, "enabled"), "bool"), new Field("type", "Mode", J.S(data, "type").NullIfEmpty() ?? "PublicLAN", "choice", "PublicLAN", "NATWithPortFwd"), new Field("subnet", "Public LAN subnet address", J.S(lan, "subnet_ip")), new Field("mask", "Public LAN subnet mask", J.S(lan, "subnet_mask")), new Field("router", "Public LAN router address", J.S(lan, "router_ip")), new Field("start", "NAT public IP range start", J.S(nat, "subnet_ip_start")), new Field("end", "NAT public IP range end", J.S(nat, "subnet_ip_end")) }, async v =>
+                Edit("Multiple static IPs", new[] {
+                    new Field("enabled", "Use multiple static IPs", J.B(data, "enabled"), "bool"),
+                    new Field("type", "How to use them", type == "NATWithPortFwd" ? natLabel : lanLabel, "choice", lanLabel, natLabel).When("enabled", "True"),
+                    new Field("subnet", "Public subnet address", J.S(lan, "subnet_ip")).When("type", lanLabel),
+                    new Field("mask", "Public subnet mask", J.S(lan, "subnet_mask")).When("type", lanLabel),
+                    new Field("router", "ISP router address", J.S(lan, "router_ip")).When("type", lanLabel),
+                    new Field("start", "First public IP", J.S(nat, "subnet_ip_start")).When("type", natLabel),
+                    new Field("end", "Last public IP", J.S(nat, "subnet_ip_end")).When("type", natLabel) }, async v =>
                 {
-                    var body = J.Obj("enabled", Flag(v, "enabled"), "type", V(v, "type"));
+                    string chosen = V(v, "type") == natLabel ? "NATWithPortFwd" : "PublicLAN";
+                    var body = J.Obj("enabled", Flag(v, "enabled"), "type", chosen);
                     if (Flag(v, "enabled"))
                     {
-                        if (V(v, "type") == "PublicLAN") body["multistaticip_settings"] = J.Obj("subnet_ip", FeatureContracts.Address(V(v, "subnet"), AddressFamily.InterNetwork), "subnet_mask", FeatureContracts.Address(V(v, "mask"), AddressFamily.InterNetwork), "router_ip", FeatureContracts.Address(V(v, "router"), AddressFamily.InterNetwork));
+                        if (chosen == "PublicLAN") body["multistaticip_settings"] = J.Obj("subnet_ip", FeatureContracts.Address(V(v, "subnet"), AddressFamily.InterNetwork), "subnet_mask", FeatureContracts.Address(V(v, "mask"), AddressFamily.InterNetwork), "router_ip", FeatureContracts.Address(V(v, "router"), AddressFamily.InterNetwork));
                         else body["multistaticip_settings_nat_portfwd"] = J.Obj("subnet_ip_start", FeatureContracts.Address(V(v, "start"), AddressFamily.InterNetwork), "subnet_ip_end", FeatureContracts.Address(V(v, "end"), AddressFamily.InterNetwork));
                     }
                     if (!Confirm("Apply multiple-static-IP settings supplied by your ISP? Incorrect values can disrupt internet access.")) return;
                     await Change("PUT", "/2.3/networks/" + networkUrl.TrimEnd('/').Split('/').Last() + "/multistaticip", body, false, "Multiple static IP settings updated.");
                 });
-            }));
+            })));
+            if (enabled && type == "PublicLAN")
+                Group("Current addresses", InfoRow("Public subnet", J.S(lan, "subnet_ip") + " / " + J.S(lan, "subnet_mask")), InfoRow("ISP router", J.S(lan, "router_ip")));
+            else if (enabled)
+                Group("Current addresses", InfoRow("Public IP range", J.S(nat, "subnet_ip_start") + " – " + J.S(nat, "subnet_ip_end")));
         }
         private void BusinessPortalPage(object data)
         {
-            Sub("Business guest wifi · existing portal configurations");
-            page.Children.Add(Section("eero Insight", "Settings/Business guest wifi/eero Insight"));
-            foreach (object raw in Entries(data, "configurations"))
+            Sub("A branded sign-in page guests see before they can use your guest wifi. Useful for shops, cafés and offices.");
+            var configs = Entries(data, "configurations");
+            foreach (object raw in configs)
             {
-                object config = raw; var p = new StackPanel(); Details(p, config, 0);
-                var row = new WrapPanel(); row.Children.Add(LocalButton("Edit portal branding", delegate { PortalEdit(config); }));
-                row.Children.Add(Button("Upload logo", async delegate { await UploadPortalAsset(config, true); }));
-                row.Children.Add(Button("Upload terms PDF", async delegate { await UploadPortalAsset(config, false); }));
-                row.Children.Add(LocalButton("Visitor information", delegate { Edit("Visitor information", new[] { new Field("email", "Capture visitor email", J.B(config, "capture_email"), "bool"), new Field("name", "Capture visitor name", J.B(config, "capture_name"), "bool") }, async v => { int id; if (!Int32.TryParse(J.First(config, "configuration_id", "id"), out id)) throw new InvalidOperationException("Missing portal configuration ID."); await Change("PUT", FeatureUrl("captive_portal/configuration"), J.Obj("id", id, "capture_email", Flag(v, "email"), "capture_name", Flag(v, "name")), false, "Visitor information settings updated."); }); }));
-                row.Children.Add(Button("Use for guest wifi", async delegate { int id; if (!Int32.TryParse(J.First(config, "configuration_id", "id"), out id)) throw new InvalidOperationException("Missing portal configuration ID."); if (!Confirm("Use this sign-in portal for guest wifi?")) return; await Change("PUT", FeatureUrl("captive_portal/subnet_id/GUEST"), J.Obj("captive_portal_configuration_id", id), false, "Guest portal configuration selected."); })); p.Children.Add(row); page.Children.Add(Card(p));
+                object config = raw;
+                Func<int> configId = delegate { int id; if (!Int32.TryParse(J.First(config, "configuration_id", "id"), out id)) throw new InvalidOperationException("eero didn't return an ID for this portal."); return id; };
+                bool captureEmail = J.B(config, "capture_email"), captureName = J.B(config, "capture_name");
+                int minutes; string session = Int32.TryParse(J.S(config, "access_expiration_in_minutes"), out minutes) ? (minutes % 1440 == 0 ? minutes / 1440 + (minutes == 1440 ? " day" : " days") : minutes % 60 == 0 ? minutes / 60 + (minutes == 60 ? " hour" : " hours") : minutes + " minutes") : "Not set";
+                Group(J.S(config, "header").NullIfEmpty() ?? "Guest sign-in portal",
+                    SettingRow("Heading & theme", "The text and colors guests see.", (J.S(config, "header").NullIfEmpty() ?? "No heading") + " · " + (J.S(config, "color_theme").NullIfEmpty() ?? "Light"), RowAction("Change", delegate { PortalEdit(config); })),
+                    SettingRow("Session length", "How long guests stay signed in before seeing the portal again.", session, RowAction("Change", delegate { PortalEdit(config); })),
+                    SettingToggle("Ask for visitor email", "Guests enter an email address before getting online.", captureEmail, async delegate(bool on)
+                    { await Change("PUT", FeatureUrl("captive_portal/configuration"), J.Obj("id", configId(), "capture_email", on, "capture_name", captureName), false, "Visitor email " + (on ? "required." : "no longer requested.")); }),
+                    SettingToggle("Ask for visitor name", "Guests enter their name before getting online.", captureName, async delegate(bool on)
+                    { await Change("PUT", FeatureUrl("captive_portal/configuration"), J.Obj("id", configId(), "capture_email", captureEmail, "capture_name", on), false, "Visitor name " + (on ? "required." : "no longer requested.")); }),
+                    SettingRow("Logo", "A PNG or JPEG image shown on the portal.", J.S(config, "business_logo_url").Length > 0 ? "Added" : "None", RowActionAsync("Upload", async delegate { await UploadPortalAsset(config, true); })),
+                    SettingRow("Terms of service", "A PDF guests can read before they accept.", J.S(config, "business_terms_of_service_url").Length > 0 ? "Added" : "None", RowActionAsync("Upload", async delegate { await UploadPortalAsset(config, false); })),
+                    SettingRow("Use for guest wifi", "Show this portal when someone joins your guest network.", null, RowActionAsync("Use", async delegate { int id = configId(); if (!Confirm("Use this sign-in portal for guest wifi?")) return; await Change("PUT", FeatureUrl("captive_portal/subnet_id/GUEST"), J.Obj("captive_portal_configuration_id", id), false, "Guest portal selected."); })));
             }
-            page.Children.Add(Text("Edit existing portal text, theme, visitor fields, session duration and hosted links, or upload a PNG/JPEG logo and terms PDF. New business provisioning and cellular/accessory activation still depend on their service integrations.", 13, "#64738A"));
+            if (data != null && configs.Count == 0) Group(null, InfoRow("No guest portals yet", null, "Guest portals are created for business networks through eero. Once one exists, you can edit it here."));
+            Group("Other networks", SettingRow("Use on my other networks", "Turn the business guest portal on for every network in your account.", null, RowAction("Change", delegate { Edit("Business guest network", new[] { new Field("other", "Use the business guest portal on my other networks", false, "bool") }, async v => { await Change("PUT", FeatureUrl("business_guest_network"), ApkContracts.BusinessGuest(Flag(v, "other")), false, "Business guest network updated."); }); })));
+            RelatedPages();
         }
         private void PortalEdit(object config)
         {
-            Edit("Guest portal branding", new[] { new Field("header", "Heading", J.S(config, "header")), new Field("sub_header", "Subheading", J.S(config, "sub_header")), new Field("color_theme", "Theme", J.S(config, "color_theme").NullIfEmpty() ?? "Light", "choice", "Light", "Dark"), new Field("minutes", "Session duration in minutes", J.S(config, "access_expiration_in_minutes")), new Field("logo", "Hosted business logo URL (optional)", J.S(config, "business_logo_url")), new Field("terms", "Hosted business terms URL (optional)", J.S(config, "business_terms_of_service_url")) }, async v =>
+            Edit("Guest portal branding", new[] { new Field("header", "Heading", J.S(config, "header")), new Field("sub_header", "Subheading", J.S(config, "sub_header")), new Field("color_theme", "Theme", J.S(config, "color_theme").NullIfEmpty() ?? "Light", "choice", "Light", "Dark"), new Field("minutes", "Session length in minutes", J.S(config, "access_expiration_in_minutes")).Help("For example 60 for one hour or 1440 for one day."), new Field("logo", "Hosted business logo URL (optional)", J.S(config, "business_logo_url")), new Field("terms", "Hosted business terms URL (optional)", J.S(config, "business_terms_of_service_url")) }, async v =>
             {
                 int id, minutes; if (!Int32.TryParse(J.First(config, "configuration_id", "id"), out id) || !Int32.TryParse(V(v, "minutes"), out minutes) || minutes < 1 || minutes > 525600) throw new ArgumentException("Enter a session duration between 1 and 525600 minutes.");
                 foreach (string key in new[] { "logo", "terms" }) if (V(v, key).Length > 0) { Uri uri; if (!Uri.TryCreate(V(v, key), UriKind.Absolute, out uri) || uri.Scheme != "https" || uri.UserInfo.Length > 0) throw new ArgumentException("Use HTTPS URLs for hosted assets and terms."); }

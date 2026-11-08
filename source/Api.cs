@@ -134,7 +134,7 @@ namespace EeroDesktop
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             http = new HttpClient(handler ?? new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate });
             http.Timeout = TimeSpan.FromSeconds(30);
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("EeroDesktop/1.0.0 (Windows; unofficial)");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("EeroDesktop/1.1.0 (Windows; unofficial)");
             http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         }
         public bool Restore() { string saved = store.Load(); try { token = saved == null ? null : ValidToken(saved); } catch (InvalidDataException) { store.Clear(); token = null; } Remember = SignedIn; return SignedIn; }
@@ -169,6 +169,17 @@ namespace EeroDesktop
             else store.Clear();
         }
         private sealed class Reply { public object Data; public string Cookie; }
+        // Retrofit @Field lists (for example colors[]) repeat the same key once per value.
+        internal static IEnumerable<KeyValuePair<string, string>> FormPairs(IDictionary<string, object> body)
+        {
+            foreach (var p in body)
+            {
+                var many = p.Value as IEnumerable;
+                if (many != null && !(p.Value is string)) { foreach (object item in many) yield return new KeyValuePair<string, string>(p.Key, FormValue(item)); }
+                else yield return new KeyValuePair<string, string>(p.Key, FormValue(p.Value));
+            }
+        }
+        private static string FormValue(object v) { return v is bool ? ((bool)v ? "true" : "false") : J.S(v); }
         private async Task<Reply> Raw(string method, string path, object body, string credential, bool form, bool session, CancellationToken cancellation = default(CancellationToken))
         {
             using (var req = new HttpRequestMessage(new HttpMethod(method), Resource(path)))
@@ -176,8 +187,10 @@ namespace EeroDesktop
                 if (!String.IsNullOrEmpty(credential)) req.Headers.Add("Cookie", "s=" + ValidToken(credential));
                 if (body != null)
                 {
-                    if (form)
-                        req.Content = new FormUrlEncodedContent(((IDictionary<string, object>)body).Select(p => new KeyValuePair<string, string>(p.Key, p.Value is bool ? ((bool)p.Value ? "true" : "false") : J.S(p.Value))));
+                    var multipart = body as MultipartFields;
+                    if (multipart != null) req.Content = multipart.Content();
+                    else if (form)
+                        req.Content = new FormUrlEncodedContent(FormPairs((IDictionary<string, object>)body));
                     else req.Content = new StringContent(J.Stringify(body), Encoding.UTF8, "application/json");
                 }
                 using (HttpResponseMessage response = await http.SendAsync(req, cancellation).ConfigureAwait(false))

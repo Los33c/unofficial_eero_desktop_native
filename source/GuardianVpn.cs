@@ -41,7 +41,7 @@ namespace EeroDesktop
         }
         public static string Gateway(string host)
         {
-            if (!Regex.IsMatch(host ?? "", @"^[a-z0-9][a-z0-9-]{0,62}\.sgw\.guardianapp\.com$", RegexOptions.IgnoreCase)) throw new InvalidDataException("Guardian returned an unsupported VPN server.");
+            if (!Regex.IsMatch(host ?? "", @"^[a-z0-9][a-z0-9-]{0,62}\.sgw\.guardianapp\.com\z", RegexOptions.IgnoreCase)) throw new InvalidDataException("Guardian returned an unsupported VPN server.");
             return host.ToLowerInvariant();
         }
         public static string Key(string value)

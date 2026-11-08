@@ -19,7 +19,7 @@ using System.Windows.Threading;
 [assembly: System.Reflection.AssemblyCompany("Carlos B.")]
 [assembly: System.Reflection.AssemblyProduct("eero Desktop (Unofficial)")]
 [assembly: System.Reflection.AssemblyDescription("Independent eero network manager for Windows. Made by: Carlos B. (Los33).")]
-[assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.1.0.0")]
 
 namespace EeroDesktop
 {
@@ -132,7 +132,7 @@ namespace EeroDesktop
             if (Application.Current.TryFindResource("NavigationButton") == null) Program.ApplyTheme();
             statusPath = diagnosticsPath;
             preview = isPreview; backgroundLaunch = startInBackground && !isPreview;
-            Title = "eero Desktop · Unofficial · v1.0";
+            Title = "eero Desktop · Unofficial · v1.1";
             Icon = ApplicationIcon.WindowImage;
             Width = 1360; Height = 880; MinWidth = 1040; MinHeight = 720;
             UseLayoutRounding = true;
@@ -234,7 +234,7 @@ namespace EeroDesktop
             finally { busy = false; if (controls != null) controls.IsEnabled = true; }
         }
         private void ClearData()
-        { notificationEpoch++; CloseAccountWindows(); account = network = selectedProfile = selectedNode = null; networkUrl = null; currentPage = "Home"; networkList.Clear(); devices.Clear(); nodes.Clear(); profiles.Clear(); loadErrors.Clear(); featureData.Clear(); bluetoothResults.Clear(); wiredSetup = new WiredNetworkSetup(); }
+        { notificationEpoch++; CloseAccountWindows(); history.Clear(); account = network = selectedProfile = selectedNode = null; networkUrl = null; currentPage = "Home"; networkList.Clear(); devices.Clear(); nodes.Clear(); profiles.Clear(); loadErrors.Clear(); featureData.Clear(); bluetoothResults.Clear(); wiredSetup = new WiredNetworkSetup(); }
 
         private void CloseAccountWindows()
         { foreach (Window child in OwnedWindows.Cast<Window>().ToArray()) child.Close(); }
@@ -327,20 +327,41 @@ namespace EeroDesktop
                 }));
                 row.Children.Add(LocalButton("Use a different account", delegate { api.CancelLogin(); ShowLogin(false); })); form.Children.Add(row);
             }
-            notice = Text("", 13, "#52647C"); notice.Margin = new Thickness(0, 18, 0, 0); form.Children.Add(notice);
-            form.Children.Add(Button("Check connection", async delegate
+            notice = Text("", 13, "#52647C"); notice.Margin = new Thickness(0, 10, 0, 0); form.Children.Add(notice);
+            if (!verify)
+            {
+                var otherHead = Text("Other ways to sign in", 13, "#17263C", true); otherHead.Margin = new Thickness(0, 14, 0, 8); form.Children.Add(otherHead);
+                var options = new StackPanel();
+                options.Children.Add(LoginOption("Amazon", "Use the Amazon login linked to your eero account.", "", delegate { AmazonConsumerSignIn(); return Task.FromResult(0); }));
+                options.Children.Add(new Border { Height = 1, Background = Brush("#E5EAF3"), Margin = new Thickness(48, 0, 8, 0) });
+                options.Children.Add(LoginOption("eero's website", "Sign in on eero.com in a secure window.", "", delegate { WebsiteSignIn(); return Task.FromResult(0); }));
+                options.Children.Add(new Border { Height = 1, Background = Brush("#E5EAF3"), Margin = new Thickness(48, 0, 8, 0) });
+                options.Children.Add(LoginOption("Your internet provider", "If your provider gave you your eeros.", "", ProviderSignIn));
+                form.Children.Add(Card(options, 4));
+            }
+            var links = new WrapPanel { Margin = new Thickness(-8, 0, 0, 4) };
+            if (!verify) { var create = LocalButton("New to eero? Create an account", BeginRegistrationUi); create.Style = (Style)FindResource("QuietButton"); links.Children.Add(create); }
+            var check = Button("Trouble connecting? Check connection", async delegate
             {
                 await api.CheckConnection();
                 SetNotice("Connected to eero securely. You can request your verification code.");
                 ReportStatus("connection_ok");
-            }));
-            if (!verify) form.Children.Add(LocalButton("Create an eero account", BeginRegistrationUi));
-            if (!verify) form.Children.Add(LocalButton("Sign in on eero's website", WebsiteSignIn));
-            if (!verify) form.Children.Add(Button("Sign in through an internet provider", ProviderSignIn));
-            if (!verify) form.Children.Add(LocalButton("Sign in with Amazon", AmazonConsumerSignIn));
+            }); check.Style = (Style)FindResource("QuietButton"); links.Children.Add(check);
+            form.Children.Add(links);
             if (!preview && WindowsVpn.OwnActiveScopes().Length > 0) form.Children.Add(Button("Disconnect active Windows VPN", async delegate
             { foreach (string scope in WindowsVpn.OwnActiveScopes()) await WindowsVpn.Control("disconnect", scope); SetNotice("Windows VPN disconnected."); }));
             form.Children.Add(Text("Uses eero’s cloud service. An internet connection is required.", 12, "#64738A"));
+        }
+        // One sign-in alternative as a row: icon, name, short explanation and a chevron.
+        private Button LoginOption(string title, string description, string glyph, Func<Task> action)
+        {
+            var b = Button(title, action); b.Style = (Style)FindResource("ListRowButton"); b.MinHeight = 56; b.Padding = new Thickness(10, 8, 10, 8);
+            var grid = new Grid(); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) }); grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
+            var icon = Glyph(glyph, 18, "#274CDB"); icon.HorizontalAlignment = HorizontalAlignment.Left; grid.Children.Add(icon);
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; var name = Text(title, 14, "#17263C", true); name.Margin = new Thickness(0); words.Children.Add(name);
+            var sub = Text(description, 12, "#64738A"); sub.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(sub); Grid.SetColumn(words, 1); grid.Children.Add(words);
+            var chevron = Glyph("", 12); Grid.SetColumn(chevron, 2); grid.Children.Add(chevron);
+            b.Content = grid; System.Windows.Automation.AutomationProperties.SetName(b, "Sign in with " + title); return b;
         }
         private UIElement NetworkArt()
         {
@@ -403,7 +424,12 @@ namespace EeroDesktop
             PageHeading();
             if (network == null && !AccountOnlyPage(currentPage))
             {
-                page.Children.Add(Card(Text("No network loaded. Refresh your account, join a network or create one using a separate eero ready for setup.", 16))); page.Children.Add(Section("Join a network", "Settings/User permissions/Join a network")); page.Children.Add(Section("Pending transfers", "Settings/Network management/Pending transfers")); page.Children.Add(Section("Create a wired network", "Home/Add or replace eero/Create a network")); page.Children.Add(Section("Incoming access invitations", "Settings/User permissions/Incoming access invitations")); loading = false; return;
+                // No network on this account yet: explain, then offer every way to get one.
+                Group(null, InfoRow("No network yet", null, "Your account doesn't have an eero network the app can open. If you just set one up, choose Refresh at the top right."));
+                AddGroupHeading(page, "Get started");
+                page.Children.Add(RowGroup(new[] { "Settings/User permissions/Join a network", "Settings/User permissions/Incoming access invitations", "Settings/Network management/Pending transfers", "Home/Add or replace eero/Create a network" }
+                    .Select(path => FeatureCatalog.Entries.FirstOrDefault(e => e.Path == path)).Where(e => e != null).Select(e => (UIElement)ListRow(e, false))));
+                loading = false; return;
             }
             if (currentPage == "Home" || currentPage == "Overview") Overview();
             else if (currentPage == "Devices") DevicePage();
@@ -413,6 +439,9 @@ namespace EeroDesktop
             else if (currentPage == "Settings") FeatureMenu("Settings");
             else if (currentPage == "Help") HelpPage();
             else RenderFeature();
+            // Standalone action buttons size to their label instead of spanning the page.
+            foreach (Button action in page.Children.OfType<Button>()) if (action.HorizontalAlignment == HorizontalAlignment.Stretch) action.HorizontalAlignment = HorizontalAlignment.Left;
+            MarkDangerActions(page);
             SetNotice(preview ? "Preview mode · No network requests or changes" : "Updated " + lastRefresh.ToString("h:mm:ss tt") + " · Refreshes every minute while active");
             loading = false;
         }
@@ -456,31 +485,17 @@ namespace EeroDesktop
         private void DeviceDialog(object d)
         {
             DeviceRow row = Device(d); var p = new StackPanel(); p.Children.Add(Text(row.Name, 25, "#17263C", true));
-            Detail(p, "Connection", row.Status + " · " + row.Connection); Detail(p, "IP address", row.IP); Detail(p, "MAC address", J.S(d, "mac")); Detail(p, "Manufacturer", J.S(d, "manufacturer")); Detail(p, "Connected eero", J.S(d, "source", "location")); Detail(p, "Profile", row.Profile);
-            p.Children.Add(Text("Device nickname", 13, "#17263C", true)); var name = new TextBox { Text = row.Name, MaxLength = 100 }; p.Children.Add(name);
+            p.Children.Add(StatusBadge(row.Status, row.Status == "Online")); p.Children.Add(new Border { Height = 14 });
             var w = Dialog(row.Name, p);
-            string url = J.S(d, "url").NullIfEmpty() ?? networkUrl + "/devices/" + Uri.EscapeDataString(J.S(d, "mac"));
-            p.Children.Add(Button("Save nickname", async delegate { ValidateName(name.Text); w.Close(); await Mutate("PUT", url, J.Obj("nickname", name.Text.Trim()), "Device nickname updated."); }, true));
-            var buttons = new WrapPanel();
-            buttons.Children.Add(Button(J.B(d, "paused") ? "Resume internet" : "Pause internet", async delegate
-            {
-                if (!Confirm("Change internet access for " + row.Name + "?")) return;
-                w.Close(); await Mutate("PUT", url, J.Obj("paused", !J.B(d, "paused")), "Device access updated.");
-            }));
-            buttons.Children.Add(Button(J.B(d, "blocked") ? "Unblock device" : "Block device", async delegate
-            {
-                if (!Confirm((J.B(d, "blocked") ? "Allow " : "Block ") + row.Name + " on this network?")) return;
-                w.Close(); await Change(J.B(d, "blocked") ? "DELETE" : "POST", FeatureUrl("blacklist" + (J.B(d, "blocked") ? "/" + Uri.EscapeDataString(J.S(d, "mac")) : "")), J.B(d, "blocked") ? null : J.Obj("mac", J.S(d, "mac")), true, "Device block setting updated.");
-            })); p.Children.Add(buttons);
-            DeviceExtraActions(d, w, p);
-            p.Children.Add(Text("Pausing or blocking this PC may disconnect the app from the internet.", 12, "#64738A")); w.ShowDialog();
+            foreach (UIElement part in DevicePanel(d, delegate { w.Close(); })) p.Children.Add(part);
+            w.ShowDialog();
         }
         private void NodePage()
         {
-            Sub("Inspect your mesh nodes and restart an individual eero."); Availability("eero nodes");
-            page.Children.Add(Section("Placement tests", "Home/eeros/Placement tests"));
+            Sub("The eeros that make up your wifi. Open one to see its details, rename it or restart it."); Availability("eero nodes");
             foreach (object n in nodes) page.Children.Add(NodeCard(n));
-            if (nodes.Count == 0 && !loadErrors.ContainsKey("eero nodes")) page.Children.Add(Card(Text("No eero nodes were returned.")));
+            if (nodes.Count == 0 && !loadErrors.ContainsKey("eero nodes")) page.Children.Add(Card(Text("eero didn't return any eeros for this network. Choose Refresh at the top right to try again.")));
+            RelatedPagesFor("Home/eeros/Placement tests", "Home/Add or replace eero");
         }
         private Border NodeCard(object n) { return NativeNodeCard(n); }
         private async Task StartSpeedTest()
@@ -520,6 +535,11 @@ namespace EeroDesktop
             nmap["connection"] = J.Obj("mode", "nat"); nmap["timezone"] = J.Obj("value", "America/Chicago");
             nmap["auto_setup_mode"] = "DEFAULT"; nmap["accessories"] = new[] { J.Obj("name", "Sample accessory", "model", "Sample cellular accessory", "dsn", "SAMPLEACCESSORY1", "registered", true, "joined", true, "eero_id", "1") };
             nmap["amazon_account_linked"] = true; nmap["smart_home_hub"] = true;
+            nmap["lease"] = J.Obj("mode", "dhcp"); nmap["pppoe_enabled"] = false; nmap["nat_port_randomization"] = true;
+            nmap["power_saving"] = false; nmap["power_saving_schedule_enabled"] = false; nmap["thread"] = true;
+            nmap["dynamic_dns"] = J.Obj("enabled", false, "hostname", "sample-network.example");
+            // Developer switch for checking availability badges in preview renders.
+            if (Environment.GetEnvironmentVariable("EERO_DESKTOP_SAMPLE_NO_PLAN") == "1") nmap["premium_status"] = "inactive";
             for (int i = 0; i < devices.Count; i++) ((IDictionary<string, object>)devices[i])["url"] = "/2.2/networks/preview/devices/" + i;
             for (int i = 0; i < nodes.Count; i++) { var node = (IDictionary<string, object>)nodes[i]; node["url"] = "/2.2/eeros/" + (i + 1); node["serial"] = "PREVIEWNODE000" + (i + 1); node["led_on"] = true; node["led_brightness"] = 100; node["resources"] = J.Obj("led_action", "/2.2/eeros/" + (i + 1) + "/led", "connections", "/2.2/eeros/" + (i + 1) + "/connections"); }
             for (int i = 0; i < profiles.Count; i++) ((IDictionary<string, object>)profiles[i])["url"] = "/2.2/networks/preview/profiles/" + (i + 1);

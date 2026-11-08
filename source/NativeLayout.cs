@@ -23,6 +23,20 @@ namespace EeroDesktop
         private static string RouteIcon(string route)
         {
             string title = route.Split('/').Last().ToLowerInvariant();
+            switch (title)
+            {
+                case "guest wifi network": return "";
+                case "nickname & location": return "";
+                case "dhcp & nat": return "";
+                case "dns": case "ipv6": case "internet connection": case "isp settings": return "";
+                case "dynamic dns": case "connected services": case "reservations & port forwarding": return "";
+                case "upnp": case "multi-wan": return "";
+                case "power saving": return "";
+                case "network flags": return "";
+                case "user permissions": return "";
+                case "troubleshooting": case "guided diagnostics": return "";
+                case "trusted certificates": return "";
+            }
             if (title.Contains("password") || title.Contains("wifi") || title.Contains("wireless")) return "\uE701";
             if (title.Contains("profile") || title.Contains("permissions") || title.Contains("account")) return "\uE77B";
             if (title.Contains("security") || title.Contains("filter") || title.Contains("protection") || title.Contains("vpn")) return "\uEA18";
@@ -67,33 +81,38 @@ namespace EeroDesktop
                 var grid = button.Content as Grid;
                 if (grid != null) foreach (TextBlock text in grid.Children.OfType<TextBlock>()) { text.Foreground = Brush(active ? "#274CDB" : "#17263C"); text.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal; }
             }
+            UpdateBackButton();
         }
 
         private void NativeShell()
         {
             root = new Grid { Background = Brush("#F3F3F3"), UseLayoutRounding = true };
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(212) }); root.ColumnDefinitions.Add(new ColumnDefinition()); Content = root;
-            var rail = new Grid(); rail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); rail.RowDefinitions.Add(new RowDefinition()); rail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.Children.Add(rail);
-            var brand = new StackPanel { Margin = new Thickness(24, 16, 0, 28) };
+            HookShellInput();
+            var rail = new Grid(); rail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); rail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); rail.RowDefinitions.Add(new RowDefinition()); rail.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.Children.Add(rail);
+            var brand = new StackPanel { Margin = new Thickness(24, 16, 0, 18) };
             var wordmark = Text("eero", 42, "#17263C"); wordmark.FontFamily = new FontFamily("Segoe UI Light"); wordmark.Margin = new Thickness(0); brand.Children.Add(wordmark);
             brand.Children.Add(Text("Desktop for Windows", 11, "#64738A")); rail.Children.Add(brand);
-            navigation = new StackPanel { Margin = new Thickness(12, 0, 12, 0) }; Grid.SetRow(navigation, 1); rail.Children.Add(navigation);
-            AddNavigation("Home", "Home", "\uE80F"); AddNavigation("Devices", "Devices", "\uE772"); AddNavigation("Activity", "Activity", "\uE9D9"); AddNavigation("Settings", "Settings", "\uE713");
-            navigation.Children.Add(new Border { Height = 1, Background = Brush("#E5EAF3"), Margin = new Thickness(12, 16, 12, 16) });
-            AddNavigation("Profiles", "Home/Profiles", "\uE716"); AddNavigation("Security & privacy", "Home/Security & privacy", "\uEA18"); AddNavigation("Help & support", "Help", "\uE897");
-            var accountPanel = new StackPanel { Margin = new Thickness(20, 12, 20, 16) }; Grid.SetRow(accountPanel, 2); rail.Children.Add(accountPanel);
+            var search = RailSearch(); Grid.SetRow(search, 1); rail.Children.Add(search);
+            navigation = new StackPanel { Margin = new Thickness(12, 0, 12, 0) };
+            var navigationScroll = new ScrollViewer { Content = navigation, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false }; Grid.SetRow(navigationScroll, 2); rail.Children.Add(navigationScroll);
+            AddNavigationHeader("Your network");
+            AddNavigation("Home", "Home", "\uE80F"); AddNavigation("Devices", "Devices", "\uE772"); AddNavigation("Profiles", "Home/Profiles", "\uE716"); AddNavigation("Activity", "Activity", "\uE9D9"); AddNavigation("Security & privacy", "Home/Security & privacy", "\uEA18");
+            AddNavigationHeader("Manage");
+            AddNavigation("Settings", "Settings", "\uE713"); AddNavigation("Help & support", "Help", "\uE897");
+            var accountPanel = new StackPanel { Margin = new Thickness(20, 12, 20, 16) }; Grid.SetRow(accountPanel, 3); rail.Children.Add(accountPanel);
             var accountButton = LocalButton("Account settings", delegate { Navigate("Settings/Account settings"); });
             accountButton.Style = (Style)FindResource("NavigationButton"); accountButton.Margin = new Thickness(-8, 0, -8, 4);
             var accountRow = new Grid(); accountRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) }); accountRow.ColumnDefinitions.Add(new ColumnDefinition()); accountRow.Children.Add(Glyph("\uE77B", 18));
             accountLabel = Text(preview ? "Preview account" : J.First(account, "name", "email", "phone"), 12); accountLabel.TextWrapping = TextWrapping.NoWrap; accountLabel.TextTrimming = TextTrimming.CharacterEllipsis; accountLabel.VerticalAlignment = VerticalAlignment.Center; accountLabel.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(accountLabel, 1); accountRow.Children.Add(accountLabel); accountButton.Content = accountRow; accountPanel.Children.Add(accountButton);
             var signout = Button(preview ? "Back to sign in" : "Sign out", async delegate { timer.Stop(); CloseAccountWindows(); if (!preview) await api.Logout(); preview = false; ClearData(); ShowLogin(false); SetNotice("Signed out. Your saved session has been cleared."); });
             signout.Style = (Style)FindResource("QuietButton"); signout.Margin = new Thickness(0, 0, 0, 12); accountPanel.Children.Add(signout);
-            accountPanel.Children.Add(Text("Unofficial client · v1.0", 10, "#64738A"));
+            accountPanel.Children.Add(Text("Unofficial client · v1.1", 10, "#64738A"));
 
             var main = new Grid(); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var contentFrame = new Border { Background = Brush("#F4F6FA"), BorderBrush = Brush("#E5EAF3"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 8, 8, 8), Child = main }; Grid.SetColumn(contentFrame, 1); root.Children.Add(contentFrame);
             var header = new Grid { Margin = new Thickness(28, 20, 24, 12) }; header.ColumnDefinitions.Add(new ColumnDefinition()); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var networkRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; networkRow.Children.Add(Glyph("\uE701", 20, "#274CDB"));
+            var networkRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; networkRow.Children.Add(BackButton()); networkRow.Children.Add(Glyph("\uE701", 20, "#274CDB"));
             networks = new ComboBox { Width = 230, Margin = new Thickness(12, 0, 16, 0), HorizontalAlignment = HorizontalAlignment.Left, DisplayMemberPath = "Name", SelectedValuePath = "Url" };
             System.Windows.Automation.AutomationProperties.SetName(networks, "Selected network");
             foreach (object n in networkList) networks.Items.Add(new NetworkChoice { Name = J.First(n, "name", "url"), Url = J.S(n, "url") });
@@ -103,7 +122,7 @@ namespace EeroDesktop
             {
                 if (busy || loading || networks.SelectedItem == null) return;
                 var choice = (NetworkChoice)networks.SelectedItem; if (networkUrl == choice.Url) return;
-                await Run(async delegate { CloseAccountWindows(); networkUrl = choice.Url; network = selectedProfile = selectedNode = null; currentPage = "Home"; devices.Clear(); nodes.Clear(); profiles.Clear(); featureData.Clear(); notificationEpoch++; if (!preview) await LoadNetwork(); RenderPage(); }, "Loading network…");
+                await Run(async delegate { CloseAccountWindows(); history.Clear(); networkUrl = choice.Url; network = selectedProfile = selectedNode = null; currentPage = "Home"; devices.Clear(); nodes.Clear(); profiles.Clear(); featureData.Clear(); notificationEpoch++; if (!preview) await LoadNetwork(); RenderPage(); }, "Loading network…");
             };
             var toolbar = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(toolbar, 1); header.Children.Add(toolbar);
             var refresh = Button("Refresh", async delegate { if (!preview) { if (network == null) { await LoadAccount(); ShowShell(); } else await LoadNetwork(); } if (currentPage.Contains("/")) await LoadFeature(currentPage); RenderPage(); ReportStatus("dashboard_loaded"); });
@@ -133,6 +152,7 @@ namespace EeroDesktop
             }
             string heading = currentPage.Split('/').Last(); if (heading == "Details" && selectedNode != null) heading = J.First(selectedNode, "location", "model"); if (heading == "Profile" && selectedProfile != null) heading = J.S(selectedProfile, "name");
             var title = Text(heading, 30, "#17263C", true); title.Margin = new Thickness(0, 0, 0, 6); page.Children.Add(title);
+            AvailabilityNotice();
         }
 
         private static Grid Columns(double first = 1, double second = 1)
@@ -150,23 +170,11 @@ namespace EeroDesktop
             var icon = Glyph(RouteIcon(route), 20, "#274CDB"); icon.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(icon);
             var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; var label = Text(title, 14, "#17263C", true); label.Margin = new Thickness(0); words.Children.Add(label);
             if (!String.IsNullOrEmpty(subtitle)) { var caption = Text(subtitle, 12, "#64738A"); caption.Margin = new Thickness(0, 4, 12, 0); words.Children.Add(caption); }
+            string why = null; string badge = action == null ? AvailabilityBadge(route, out why) : null;
+            if (badge != null) { var note = Text("⚠  " + badge, 11, "#926410", true); note.Margin = new Thickness(0, 3, 0, 0); words.Children.Add(note); b.ToolTip = badge + ". " + why; }
             Grid.SetColumn(words, 1); content.Children.Add(words); var chevron = Glyph("\uE76C", 12); Grid.SetColumn(chevron, 2); content.Children.Add(chevron); b.Content = content;
             System.Windows.Automation.AutomationProperties.SetName(b, title); return b;
         }
-        private void NativeFeatureMenu(string parent, bool explanation)
-        {
-            if (explanation) Sub(parent == "Settings" ? "Manage your network, account, and desktop preferences." : "Choose a setting to view details and make changes.");
-            var entries = FeatureCatalog.Children(parent).ToList();
-            var board = Columns();
-            for (int i = 0; i < entries.Count; i++)
-            {
-                if (i % 2 == 0) board.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                FeatureEntry item = entries[i]; var button = RouteRow(item.Title, item.Description, item.Path);
-                button.Margin = new Thickness(i % 2 == 0 ? 0 : 8, 0, i % 2 == 0 ? 8 : 0, 12); Grid.SetColumn(button, i % 2); Grid.SetRow(button, i / 2); board.Children.Add(button);
-            }
-            page.Children.Add(board);
-        }
-
         private static bool IsOnline(object data)
         {
             string status = J.S(data, "health", "internet", "status").NullIfEmpty() ?? J.S(data, "status");
@@ -202,6 +210,15 @@ namespace EeroDesktop
             var deviceSummary = new StackPanel(); deviceSummary.Children.Add(Text("Devices", 20, "#17263C", true)); var counts = Columns();
             var online = new StackPanel(); online.Children.Add(Text(loadErrors.ContainsKey("Devices") ? "—" : devices.Count(d => J.B(d, "connected")).ToString(), 32, "#17263C", true)); online.Children.Add(Text("Online", 12, "#0D7959")); counts.Children.Add(online);
             var offline = new StackPanel(); offline.Children.Add(Text(loadErrors.ContainsKey("Devices") ? "—" : devices.Count(d => !J.B(d, "connected")).ToString(), 32, "#17263C", true)); offline.Children.Add(Text("Offline", 12, "#64738A")); Grid.SetColumn(offline, 1); counts.Children.Add(offline); deviceSummary.Children.Add(counts); deviceSummary.Children.Add(Section("View all devices", "Devices")); right.Children.Add(Card(deviceSummary));
+            // The wifi details people reach for most: name, password and a QR code for guests.
+            var wifi = new StackPanel(); var wifiTop = new Grid(); wifiTop.ColumnDefinitions.Add(new ColumnDefinition()); wifiTop.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var wifiTitle = Text("Your wifi", 20, "#17263C", true); wifiTitle.Margin = new Thickness(0); wifiTop.Children.Add(wifiTitle);
+            var edit = Section("Wifi settings", "Settings/Wifi name & password"); edit.Margin = new Thickness(0, -6, -8, 0); Grid.SetColumn(edit, 1); wifiTop.Children.Add(edit); wifi.Children.Add(wifiTop);
+            var ssid = Text(J.S(network, "name").NullIfEmpty() ?? "Wifi name not reported", 16, "#17263C"); ssid.Margin = new Thickness(0, 8, 0, 10); wifi.Children.Add(ssid);
+            var wifiActions = new WrapPanel();
+            var qr = Button("Share QR code", async delegate { ShowWifiQr(J.S(network, "name"), await WifiPassword(network, NetResource("password"))); }); qr.Style = (Style)FindResource("QuietButton"); qr.Margin = new Thickness(-8, 0, 8, 0); wifiActions.Children.Add(qr);
+            var pass = Button("Show password", async delegate { ShowPassword(await WifiPassword(network, NetResource("password"))); }); pass.Style = (Style)FindResource("QuietButton"); pass.Margin = new Thickness(0, 0, 8, 0); wifiActions.Children.Add(pass);
+            wifi.Children.Add(wifiActions); right.Children.Add(Card(wifi));
             var people = new StackPanel(); people.Children.Add(Text("Profiles", 20, "#17263C", true));
             foreach (object item in profiles.Take(3)) { object profile = item; var row = RouteRow(J.S(profile, "name"), ProfileSummary(profile), "Home/Profiles", delegate { selectedProfile = profile; Navigate("Home/Profiles/Profile"); }); row.BorderThickness = new Thickness(0); row.Padding = new Thickness(0, 10, 0, 10); row.MinHeight = 62; row.Margin = new Thickness(0, 0, 0, 4); people.Children.Add(row); }
             if (profiles.Count == 0) people.Children.Add(Text("Create profiles to manage devices and scheduled pauses.", 12, "#64738A"));
@@ -220,31 +237,30 @@ namespace EeroDesktop
             var details = Text((J.First(node, "ip_address", "ip").NullIfEmpty() ?? "IP unavailable") + "  ·  " + (J.S(node, "connected_clients_count").NullIfEmpty() ?? "—") + " connected devices", 12, "#64738A"); details.Margin = new Thickness(42, 12, 0, 12); stack.Children.Add(details);
             var actions = new WrapPanel { Margin = new Thickness(42, 0, 0, -6) }; var open = Button("View details", async delegate { selectedNode = preview ? node : await Read(J.S(node, "url")); currentPage = "Home/eeros/Details"; RenderPage(); }); open.Style = (Style)FindResource("QuietButton"); actions.Children.Add(open);
             var rename = Button("Rename", async delegate { string name = Prompt("eero location", J.S(node, "location")); if (name == null) return; ValidateName(name); await Change("PUT", J.S(node, "url"), J.Obj("location", name.Trim()), true, "eero location updated."); }); rename.Style = (Style)FindResource("QuietButton"); actions.Children.Add(rename);
-            var menu = new ContextMenu(); var restart = new MenuItem { Header = "Restart eero" }; restart.Click += async delegate { await Run(async delegate { if (!Confirm("Restart " + J.First(node, "location", "model") + "? Connected devices may briefly lose internet access.")) return; if (preview) throw new InvalidOperationException("Preview mode is read only."); await api.Send("POST", J.S(node, "url") + "/reboot"); SetNotice("Restart requested. Wait a few minutes, then refresh."); }, "Restarting eero…"); }; menu.Items.Add(restart);
-            var more = LocalButton("More", delegate { menu.IsOpen = true; }); more.Style = (Style)FindResource("QuietButton"); more.ContextMenu = menu; menu.PlacementTarget = more; actions.Children.Add(more); stack.Children.Add(actions); return Card(stack, 20);
+            var restart = Button("Restart", async delegate { if (!Confirm("Restart " + J.First(node, "location", "model") + "? Connected devices may briefly lose internet access.")) return; if (preview) throw new InvalidOperationException("Preview mode is read only."); await api.Send("POST", J.S(node, "url") + "/reboot"); SetNotice("Restart requested. Wait a few minutes, then refresh."); });
+            restart.Style = (Style)FindResource("QuietButton"); restart.ToolTip = "Restart this eero"; actions.Children.Add(restart); stack.Children.Add(actions); return Card(stack, 20);
         }
 
         private void NativeDevicePage()
         {
-            Sub("Find devices and inspect their connection details."); Availability("Devices");
+            Sub("Everything connected to your network. Select a device to see its details and change its settings."); Availability("Devices");
             var tools = new Grid { Margin = new Thickness(0, 0, 0, 16) }; tools.ColumnDefinitions.Add(new ColumnDefinition()); tools.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) }); tools.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var search = new TextBox { Margin = new Thickness(0, 0, 12, 0), ToolTip = "Search by name, IP, MAC, or manufacturer", MaxLength = 254 }; System.Windows.Automation.AutomationProperties.SetName(search, "Search devices");
-            var searchHost = new Grid(); searchHost.Children.Add(search); var hint = Text("Search devices by name, MAC or IP", 13, "#64738A"); hint.Margin = new Thickness(12, 0, 28, 0); hint.VerticalAlignment = VerticalAlignment.Center; hint.IsHitTestVisible = false; searchHost.Children.Add(hint); tools.Children.Add(searchHost);
-            var statusFilter = new ComboBox { ItemsSource = new[] { "All devices", "Online", "Offline", "Paused", "Blocked" }, SelectedIndex = 0, Margin = new Thickness(0, 0, 12, 0) }; System.Windows.Automation.AutomationProperties.SetName(statusFilter, "Device status filter"); Grid.SetColumn(statusFilter, 1); tools.Children.Add(statusFilter);
-            var blocked = Section("Blocked devices", "Devices/Blocked devices"); blocked.Margin = new Thickness(0); Grid.SetColumn(blocked, 2); tools.Children.Add(blocked); page.Children.Add(tools);
-            var workspace = new Grid(); workspace.ColumnDefinitions.Add(new ColumnDefinition()); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
-            var grid = new DataGrid { Height = 440, SelectionMode = DataGridSelectionMode.Single, Margin = new Thickness(0), HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
+            TextBox search; TextBlock hint;
+            var searchHost = SearchField("Search by name, IP, MAC or maker", out search, out hint); searchHost.Margin = new Thickness(0, 0, 12, 0); search.MaxLength = 254; tools.Children.Add(searchHost);
+            var statusFilter = new ComboBox { ItemsSource = new[] { "All devices", "Online", "Offline", "Paused", "Blocked" }, SelectedIndex = 0, Margin = new Thickness(0, 0, 12, 0), Height = 36, VerticalContentAlignment = VerticalAlignment.Center }; System.Windows.Automation.AutomationProperties.SetName(statusFilter, "Show devices"); Grid.SetColumn(statusFilter, 1); tools.Children.Add(statusFilter);
+            var blocked = Section("Blocked devices", "Devices/Blocked devices"); blocked.Margin = new Thickness(0); blocked.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(blocked, 2); tools.Children.Add(blocked); page.Children.Add(tools);
+            var workspace = new Grid(); workspace.ColumnDefinitions.Add(new ColumnDefinition()); workspace.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(400) });
+            var grid = new DataGrid { MinHeight = 440, VerticalAlignment = VerticalAlignment.Stretch, SelectionMode = DataGridSelectionMode.Single, Margin = new Thickness(0), HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
             foreach (string name in new[] { "Name", "Status", "IP", "Connection" }) grid.Columns.Add(new DataGridTextColumn { Header = name == "IP" ? "IP address" : name, Binding = new System.Windows.Data.Binding(name), Width = new DataGridLength(name == "Name" ? 1.6 : 1, DataGridLengthUnitType.Star), MinWidth = name == "Name" ? 120 : name == "IP" ? 110 : name == "Connection" ? 100 : 75 });
             var table = Card(grid, 0); table.Margin = new Thickness(0, 0, 20, 0); workspace.Children.Add(table);
-            var details = new StackPanel(); var detailCard = Card(details, 20); detailCard.Margin = new Thickness(0); Grid.SetColumn(detailCard, 1); workspace.Children.Add(detailCard); page.Children.Add(workspace);
+            var details = new StackPanel(); details.Margin = new Thickness(0); Grid.SetColumn(details, 1); workspace.Children.Add(details); page.Children.Add(workspace);
             var count = Text("", 12, "#64738A"); count.Margin = new Thickness(0, 12, 0, 0); page.Children.Add(count);
             Action updateDetails = delegate
             {
                 details.Children.Clear(); var selected = grid.SelectedItem as DeviceRow;
-                if (selected == null) { details.Children.Add(Glyph("\uE772", 32)); details.Children.Add(Text("Device details", 18, "#17263C", true)); details.Children.Add(Text("Select a device to view its connection and profile.", 13, "#64738A")); return; }
-                details.Children.Add(Text(selected.Name, 20, "#17263C", true)); details.Children.Add(StatusBadge(selected.Status, selected.Status == "Online")); details.Children.Add(new Border { Height = 20 });
-                Detail(details, "Connection", selected.Connection); Detail(details, "IP address", selected.IP); Detail(details, "MAC address", J.S(selected.Raw, "mac")); Detail(details, "Connected eero", J.S(selected.Raw, "source", "location")); Detail(details, "Profile", selected.Profile.NullIfEmpty() ?? "Unassigned");
-                var manage = LocalButton("Manage device", delegate { DeviceDialog(selected.Raw); }); manage.Margin = new Thickness(0, 12, 0, 0); details.Children.Add(manage);
+                if (selected == null) { var empty = new StackPanel(); empty.Children.Add(Glyph("\uE772", 32)); empty.Children.Add(Text("Device details", 18, "#17263C", true)); empty.Children.Add(Text("Select a device to see its details and change its settings.", 13, "#64738A")); details.Children.Add(Card(empty, 20)); return; }
+                var head = new StackPanel(); var name = Text(selected.Name, 20, "#17263C", true); name.Margin = new Thickness(0, 0, 0, 6); head.Children.Add(name); head.Children.Add(StatusBadge(selected.Status, selected.Status == "Online")); head.Margin = new Thickness(4, 0, 0, 12); details.Children.Add(head);
+                foreach (UIElement part in DevicePanel(selected.Raw, delegate { })) details.Children.Add(part);
             };
             Action filter = delegate
             {

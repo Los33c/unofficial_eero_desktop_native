@@ -99,7 +99,7 @@ namespace EeroDesktop
             string configuration = VpnContracts.Configuration(profile);
             Assert(configuration.Contains("AllowedIPs = 0.0.0.0/0, ::/0") && configuration.Contains("DNS = 1.1.1.1, 1.0.0.1") && configuration.Contains(":51821"), "Guardian WireGuard config covers both address families with SDK DNS and endpoint port");
             Assert(!configuration.Contains("PostUp") && !configuration.Contains("PreUp") && configuration.Contains("10.20.0.2/32, fd00::2/128"), "generated VPN config has validated addresses and no command hooks");
-            foreach (string bad in new[] { "evil.test", "guardianapp.com.evil.test", "good.sgw.guardianapp.com\nPostUp=bad", "good.sgw.guardianapp.com:443" })
+            foreach (string bad in new[] { "evil.test", "guardianapp.com.evil.test", "good.sgw.guardianapp.com\nPostUp=bad", "good.sgw.guardianapp.com:443", "good.sgw.guardianapp.com\n" })
             { invalid = false; try { VpnContracts.Gateway(bad); } catch (InvalidDataException) { invalid = true; } Assert(invalid, "VPN gateway cannot redirect credentials or inject configuration"); }
             invalid = false; try { VpnContracts.Profile(key, "valid.sgw.guardianapp.com", J.Obj("server-public-key", key, "mapped-ipv4-address", "10.0.0.2/8")); } catch (InvalidDataException) { invalid = true; } Assert(invalid, "VPN server cannot inject a broad interface prefix");
             string scope = VpnContracts.Scope("account-1", "network-1"); Assert(scope != VpnContracts.Scope("account-2", "network-1") && scope != VpnContracts.Scope("account-1", "network-2") && WindowsVpn.Tunnel(scope).Length < 40, "VPN profile names isolate accounts and networks without exposing identifiers");

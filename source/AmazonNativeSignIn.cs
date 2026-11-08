@@ -30,7 +30,7 @@ namespace EeroDesktop
             client = String.Concat(Encoding.UTF8.GetBytes(serial + "#" + DeviceType).Select(b => b.ToString("x2")));
             http = new HttpClient(handler ?? new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false });
             http.Timeout = TimeSpan.FromSeconds(30); http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("EeroDesktop/1.0.0 (Windows; unofficial)");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("EeroDesktop/1.1.0 (Windows; unofficial)");
         }
         private static string Base64Url(byte[] bytes) { return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_'); }
         private static string Random() { var bytes = new byte[32]; using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(bytes); return Base64Url(bytes); }
@@ -69,7 +69,7 @@ namespace EeroDesktop
             if (query.ContainsKey("error") || query.ContainsKey("openid.error")) throw new InvalidOperationException("Amazon sign-in was cancelled or rejected.");
             if (!query.TryGetValue("openid.oa2.authorization_code", out code) || code.Length == 0 || code.Length > 8192 || code.Any(c => c <= 32 || c >= 127)) throw new InvalidDataException("Amazon did not return a valid authorization code.");
             if (query.ContainsKey("openid.oa2.scope") && query["openid.oa2.scope"] != "device_auth_access") throw new InvalidDataException("Amazon returned an unexpected sign-in scope.");
-            return J.Obj("app_name", "EeroDesktop", "app_version", "1.0.0", "source_token_type", "authorization_code", "source_token", code,
+            return J.Obj("app_name", "EeroDesktop", "app_version", "1.1.0", "source_token_type", "authorization_code", "source_token", code,
                 "requested_token_type", "access_token", "code_verifier", verifier, "code_algorithm", "SHA-256", "client_id", client, "client_domain", "DeviceLegacy");
         }
         internal async Task<string> Exchange(Uri returned, CancellationToken cancellation)

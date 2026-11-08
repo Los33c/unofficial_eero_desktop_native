@@ -22,16 +22,18 @@ namespace EeroDesktop
         }
         private void JoinNetworkPage()
         {
-            Sub("Join a network");
-            page.Children.Add(Card(Text("Paste an eero administrator invitation link or code. Review the network and requested role before accepting.", 15)));
-            page.Children.Add(LocalButton("Review invitation", delegate
+            Sub("Got an invitation link from someone? Paste it here to see the network and the access you'd get before you accept.");
+            TextBox codeBox; TextBlock hint;
+            var field = SearchField("Paste an invitation link or code", out codeBox, out hint); field.Margin = new Thickness(0, 0, 0, 12); field.MaxWidth = 560; field.HorizontalAlignment = HorizontalAlignment.Left; codeBox.MaxLength = 1024;
+            page.Children.Add(field);
+            var review = Button("Review invitation", async delegate
             {
-                Edit("Review invitation", new[] { new Field("code", "Invitation link or code", null, "long") }, async v =>
-                {
-                    string code = ExtendedContracts.InviteCode(V(v, "code")); object data = await ReadInvite(code);
-                    AfterEditor(delegate { InvitationReview(code, data); });
-                }, "Look up invitation");
-            }));
+                string code = ExtendedContracts.InviteCode(codeBox.Text); object data = await ReadInvite(code);
+                InvitationReview(code, data);
+            }, true);
+            codeBox.KeyDown += delegate(object sender, System.Windows.Input.KeyEventArgs e) { if (e.Key == System.Windows.Input.Key.Enter && !busy) review.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent)); };
+            page.Children.Add(review);
+            page.Children.Add(Text("Nothing changes until you choose Accept in the next step.", 13, "#64738A"));
         }
         private Task<object> ReadInvite(string code) { if (preview) throw new InvalidOperationException("Sign in to review an invitation."); return api.Send("POST", "/2.2/inviteQuery", J.Obj("invite_code", code)); }
         private void InvitationReview(string code, object data)
@@ -63,46 +65,55 @@ namespace EeroDesktop
         }
         private void PendingTransfersPage(object data)
         {
-            Sub("Pending network transfers"); var transfers = Entries(data, "transfers");
-            if (transfers.Count == 0) page.Children.Add(Card(Text("No pending transfers were returned.")));
+            Sub("Networks someone wants to give to your account. If you accept, you become the owner and can manage it from the network selector.");
+            var transfers = Entries(data, "transfers"); var rows = new List<UIElement>();
             foreach (object raw in transfers)
             {
-                object transfer = raw; string id = ExtendedContracts.Identifier(J.S(transfer, "id")); var p = new StackPanel(); Details(p, transfer, 0); var row = new WrapPanel();
+                object transfer = raw; string id = ExtendedContracts.Identifier(J.S(transfer, "id"));
+                string from = J.First(transfer, "organization_name", "sender_name", "from"), what = J.First(transfer, "network_name", "subset_name", "name"), when = J.First(transfer, "created_at", "created");
+                var actions = new List<Button>();
                 foreach (bool value in new[] { true, false })
                 {
-                    bool accept = value; row.Children.Add(Button(accept ? "Accept transfer" : "Decline transfer", async delegate
+                    bool accept = value; var b = RowActionAsync(accept ? "Accept" : "Decline", async delegate
                     {
                         if (preview) throw new InvalidOperationException("Preview mode is read only.");
-                        if (!Confirm((accept ? "Accept ownership of" : "Decline") + " this network transfer from " + J.S(transfer, "organization_name") + "?")) return;
+                        if (!Confirm((accept ? "Accept ownership of" : "Decline") + " this network transfer" + (from.Length > 0 ? " from " + from : "") + "?")) return;
                         await api.Send("POST", "/2.2/network_transfers/" + id + (accept ? "/accept" : "/deny"));
                         await ReloadMembership(accept ? "Network transfer accepted." : "Network transfer declined.");
-                    }));
+                    });
+                    if (accept) { b.Style = (Style)FindResource("AccentButton"); CompactAction(b); }
+                    actions.Add(b);
                 }
-                p.Children.Add(row); page.Children.Add(Card(p));
+                rows.Add(SettingRow((what.NullIfEmpty() ?? "A network") + (from.Length > 0 ? " from " + from : ""), when.Length > 0 ? "Sent " + when : "Waiting for your answer", null, actions.ToArray()));
             }
+            if (rows.Count == 0) rows.Add(InfoRow("No pending transfers", null, "When someone sends you a network, it shows up here."));
+            Group(null, rows.ToArray());
             string next = J.S(data, "next_token"); int token;
             if (Int32.TryParse(next, out token)) page.Children.Add(Button("Next page of transfers", async delegate { featureData[currentPage] = await Read("/2.2/network_transfers/pending?token=" + token); RenderPage(); }));
         }
         private void LicensePage()
         {
-            Sub("Redeem a software subscription key");
-            if (network == null) { page.Children.Add(Text("Select a network before redeeming a key.")); return; }
-            page.Children.Add(Card(Text("Use a software key supplied by eero or your provider. First validate the key, then review the activation options. Automatic renewal starts unchecked.", 15)));
-            page.Children.Add(LocalButton("Validate a license key", delegate
+            Sub("Use a software key from eero or your provider to activate a plan. You'll check the key first, then confirm before anything is activated. Automatic renewal starts off.");
+            if (network == null) { Group(null, InfoRow("No network selected", null, "Choose the network to activate the key for at the top.")); return; }
+            Group(null, SettingRow("License key", "Activates on " + (J.S(network, "name").NullIfEmpty() ?? "this network") + ".", null, RowAction("Enter key", delegate
             {
                 Edit("License key", new[] { new Field("key", "Software key", null, "password") }, async v =>
                 {
                     if (preview) throw new InvalidOperationException("Sign in to validate a key."); string key = V(v, "key").Trim();
                     object result = await api.Send("POST", "/2.2/license_keys", ExtendedContracts.License(key));
                     AfterEditor(delegate { LicenseActivation(key, result); });
-                }, "Validate key");
-            }));
+                }, "Check key");
+            })));
         }
         private void OutgoingTransferPage(object data)
         {
-            Sub("Outgoing ownership transfer"); ObjectCards(data);
-            if (String.IsNullOrEmpty(J.S(data, "recipient_email_address")) && String.IsNullOrEmpty(J.S(data, "transfer_date"))) { page.Children.Add(Text("No outgoing ownership invitation was returned.", 14, "#64738A")); return; }
-            ActionRow(Button("Resend invitation", async delegate { if (!Confirm("Resend the pending ownership invitation to the current recipient?")) return; await Change("POST", NetResource("transfer"), null, false, "Ownership invitation resent."); }), Button("Cancel ownership invitation", async delegate { if (!Confirm("Cancel the outgoing ownership invitation?")) return; await Change("DELETE", NetResource("transfer"), null, false, "Ownership invitation canceled."); }));
+            Sub("An invitation you sent to give this network to someone else.");
+            string to = J.First(data, "recipient_email_address", "recipient_phone_number", "recipient_name"), sent = J.S(data, "transfer_date");
+            if (to.Length == 0 && sent.Length == 0) { Group(null, InfoRow("No transfer in progress", null, "Start one from Network management › Transfer ownership.")); return; }
+            Group(null, SettingRow("Invitation to " + (to.NullIfEmpty() ?? "recipient"), (sent.Length > 0 ? "Sent " + sent + " · " : "") + "Waiting for them to accept. Ownership changes only when they do.", null,
+                RowActionAsync("Resend", async delegate { if (!Confirm("Resend the pending ownership invitation to the current recipient?")) return; await Change("POST", NetResource("transfer"), null, false, "Ownership invitation resent."); }),
+                RowActionAsync("Cancel", async delegate { if (!Confirm("Cancel the outgoing ownership invitation?")) return; await Change("DELETE", NetResource("transfer"), null, false, "Ownership invitation canceled."); }, true)));
+            TechnicalDetails(data);
         }
         private void LicenseActivation(string key, object result)
         {
@@ -121,10 +132,16 @@ namespace EeroDesktop
         }
         private void PartnerBenefitsPage()
         {
-            Sub("eero Plus partner benefits"); page.Children.Add(Text("Benefits require the corresponding subscription. Redemption codes are shown only when you request them.", 14, "#64738A"));
-            ActionRow(Button("1Password status", async delegate { Info("1Password", await Read("/2.2/account/1password_status")); }), Button("1Password redemption code", async delegate { ShowPartnerCode("1Password", await Read("/2.2/partners/onepassword/coupon?test=false")); }), Button("Malwarebytes redemption code", async delegate { ShowPartnerCode("Malwarebytes", await Read("/2.2/partners/malwarebytes/coupon?test=false")); }), Section("Identity protection & digital footprint", "Home/Security & privacy/Identity protection"));
-            if (network != null) page.Children.Add(Button("VPN seat availability", async delegate { Info("VPN seats", await Read("/2.2/partners/guardian/networks/" + NetworkId + "/availability")); }));
-            page.Children.Add(Text("A native Windows VPN tunnel and the partner applications themselves remain separate integrations. These controls retrieve the eero benefit status and redemption information.", 13, "#64738A"));
+            Sub("Apps and services included with eero Plus. You need the matching plan. Codes only appear when you ask for them.");
+            Group("Your benefits",
+                SettingRow("1Password", "Password manager. Get a code, then redeem it on 1Password's website.", null,
+                    RowActionAsync("Status", async delegate { Info("1Password", await Read("/2.2/account/1password_status")); }),
+                    RowActionAsync("Get code", async delegate { ShowPartnerCode("1Password", await Read("/2.2/partners/onepassword/coupon?test=false")); })),
+                SettingRow("Malwarebytes", "Antivirus for your computers and phones.", null,
+                    RowActionAsync("Get code", async delegate { ShowPartnerCode("Malwarebytes", await Read("/2.2/partners/malwarebytes/coupon?test=false")); })),
+                network != null ? SettingRow("VPN (Guardian)", "See how many VPN devices your plan allows. Set up the VPN under Security & privacy.", null,
+                    RowActionAsync("Check seats", async delegate { Info("VPN seats", await Read("/2.2/partners/guardian/networks/" + NetworkId + "/availability")); })) : null);
+            RelatedPagesFor("Home/Security & privacy/Identity protection", "Home/Security & privacy/VPN");
         }
         private void ShowPartnerCode(string title, object result)
         {
@@ -134,42 +151,56 @@ namespace EeroDesktop
         }
         private void IdentityProtectionPage(object data)
         {
-            Sub("Identity protection & digital footprint"); ObjectCards(data, "Protection status");
-            ActionRow(Button("Supported countries", async delegate { Info("Supported countries", await Read(FeatureUrl("identity_protection/countries"))); }), LocalButton("Activate identity protection", delegate
+            Sub("Watches for your personal information in data breaches and on the dark web. Included with some eero Plus plans.");
+            object enabled = J.Get(data, "enabled");
+            Group("Protection",
+                SettingRow("Identity protection", J.S(data, "status").Length > 0 ? Friendly(J.S(data, "status")) : "Turn it on to start monitoring.", enabled is bool ? ((bool)enabled ? "On" : "Off") : "Not reported",
+                    enabled is bool && (bool)enabled ? null : RowAction("Turn on", ActivateIdentityProtection),
+                    RowActionAsync("Countries", async delegate { Info("Supported countries", await Read(FeatureUrl("identity_protection/countries"))); })));
+            object previous; featureData.TryGetValue("identity_scan", out previous);
+            Group("Scan an email address",
+                SettingRow("1. Scan", "Checks where an email address appears in known data breaches.", null, RowAction("Scan email", ScanIdentityEmail)),
+                SettingRow("2. Verify the email (optional)", "Verify you own the address to see the full results. eero sends a code to it.", null, RowAction("Send code", SendIdentityVerification), RowAction("Enter code", VerifyIdentityEmail)),
+                previous != null ? SettingRow("Latest result", null, null, RowAction("View", delegate { IdentityScanResult(previous); })) : null);
+        }
+        private void ActivateIdentityProtection()
+        {
             {
-                Edit("Activate identity protection", new[] { new Field("country", "Two-letter country code", "US") }, async v =>
+                Edit("Turn on identity protection", new[] { new Field("country", "Country", "US").Help("Two-letter code, for example US, CA or GB. Use Countries to see where it's available.") }, async v =>
                 {
                     string country = V(v, "country").Trim().ToUpperInvariant(); if (!Regex.IsMatch(country, "^[A-Z]{2}$")) throw new ArgumentException("Enter a two-letter country code.");
-                    if (!Confirm("Activate the identity-protection benefit for this account and country?")) return;
+                    if (!Confirm("Turn on identity protection for this account in " + country + "?")) return;
                     await Change("POST", "/2.2/account/identity_protection/signup", J.Obj("country_code", country), false, "Identity protection activation requested.");
-                }, "Activate");
-            }), LocalButton("Scan an email address", delegate
+                }, "Turn on");
+            }
+        }
+        private void ScanIdentityEmail()
+        {
+            Edit("Scan an email address", new[] { new Field("email", "Email address") }, async v =>
             {
-                Edit("Digital footprint scan", new[] { new Field("email", "Email address to scan") }, async v =>
-                {
-                    string email = ExtendedContracts.Email(V(v, "email")); if (preview) throw new InvalidOperationException("Sign in to run a scan.");
-                    if (!Confirm("Send " + email + " to eero's identity-protection service for a digital-footprint scan?")) return;
-                    object result = await api.Send("POST", "/2.2/account/identity_protection/scan", J.Obj("email", email)); featureData["identity_scan"] = result;
-                    AfterEditor(delegate { IdentityScanResult(result); });
-                }, "Run scan");
-            }), LocalButton("Send email verification", delegate
+                string email = ExtendedContracts.Email(V(v, "email")); if (preview) throw new InvalidOperationException("Sign in to run a scan.");
+                if (!Confirm("Send " + email + " to eero's identity-protection service for a scan?")) return;
+                object result = await api.Send("POST", "/2.2/account/identity_protection/scan", J.Obj("email", email)); featureData["identity_scan"] = result;
+                AfterEditor(delegate { IdentityScanResult(result); });
+            }, "Scan");
+        }
+        private void SendIdentityVerification()
+        {
+            Edit("Verify your email", new[] { new Field("email", "Email address").Help("eero sends a code to this address.") }, async v => { if (preview) throw new InvalidOperationException("Sign in to request verification."); await api.Send("POST", "/2.2/account/identity_protection/scan/email", J.Obj("email", ExtendedContracts.Email(V(v, "email")))); SetNotice("Code sent. Choose Enter code when it arrives."); }, "Send code");
+        }
+        private void VerifyIdentityEmail()
+        {
+            Edit("Enter verification code", new[] { new Field("code", "Code from the email") }, async v =>
             {
-                Edit("Email verification", new[] { new Field("email", "Email address") }, async v => { if (preview) throw new InvalidOperationException("Sign in to request verification."); await api.Send("POST", "/2.2/account/identity_protection/scan/email", J.Obj("email", ExtendedContracts.Email(V(v, "email")))); SetNotice("Identity-protection verification email requested."); }, "Send verification email");
-            }), LocalButton("Verify scan email", delegate
-            {
-                Edit("Verify digital-footprint email", new[] { new Field("code", "Verification code") }, async v =>
-                {
-                    string code = V(v, "code").Trim(); if (!Regex.IsMatch(code, "^[A-Za-z0-9-]{4,32}$")) throw new ArgumentException("Enter the code from the verification email."); if (preview) throw new InvalidOperationException("Sign in to verify an email.");
-                    object result = await api.Send("POST", "/2.2/account/identity_protection/verify_email", J.Obj("code", code)); featureData["identity_scan"] = result; AfterEditor(delegate { IdentityScanResult(result); });
-                }, "Verify");
-            }));
-            object previous; if (featureData.TryGetValue("identity_scan", out previous)) page.Children.Add(LocalButton("Latest scan result", delegate { IdentityScanResult(previous); }));
+                string code = V(v, "code").Trim(); if (!Regex.IsMatch(code, "^[A-Za-z0-9-]{4,32}$")) throw new ArgumentException("Enter the code from the verification email."); if (preview) throw new InvalidOperationException("Sign in to verify an email.");
+                object result = await api.Send("POST", "/2.2/account/identity_protection/verify_email", J.Obj("code", code)); featureData["identity_scan"] = result; AfterEditor(delegate { IdentityScanResult(result); });
+            }, "Verify");
         }
         private void IdentityScanResult(object result)
         {
             var p = new StackPanel(); p.Children.Add(Text("Digital footprint", 23, "#17263C", true)); Details(p, result, 0);
             string report = J.S(result, "mwb_full_report_url"); if (report.Length > 0) { var b = new Button { Content = "Open detailed report at Malwarebytes" }; b.Click += delegate { OpenPartnerReport(report); }; p.Children.Add(b); }
-            if (J.B(result, "email_unverified")) p.Children.Add(Text("Use Send email verification, then Verify scan email to unlock verified results.", 14, "#64738A")); Dialog("Digital footprint", p).ShowDialog();
+            if (J.B(result, "email_unverified")) p.Children.Add(Text("Verify the email (step 2 on the page) to see the full results.", 14, "#64738A")); Dialog("Digital footprint", p).ShowDialog();
         }
         private void OpenPartnerReport(string url)
         {
@@ -178,26 +209,45 @@ namespace EeroDesktop
         }
         private void SetupVendorsPage(object data)
         {
-            Sub("Connected device setup"); var vendors = Entries(data, "vendors", "configurations");
-            if (vendors.Count == 0) ObjectCards(data);
+            Sub("Let smart-home brands set up their devices on your wifi automatically, without you typing the password.");
+            var vendors = Entries(data, "vendors", "configurations"); var rows = new List<UIElement>();
             foreach (object raw in vendors)
             {
-                object vendor = raw; string id = J.S(vendor, "vendor_id"); var p = new StackPanel(); Details(p, vendor, 0);
-                if (id.Length > 0) p.Children.Add(LocalButton("Edit setup permission", delegate { Edit("Connected setup", new[] { new Field("enabled", "Allow setup for this vendor", J.B(vendor, "enabled"), "bool") }, async v => { if (!Confirm("Change connected-device setup for this vendor?")) return; await Change("PUT", FeatureUrl("simple_setup/vendors/" + Uri.EscapeDataString(id)), J.Obj("enabled", Flag(v, "enabled")), true, "Setup permission updated."); }); })); page.Children.Add(Card(p));
+                object vendor = raw; string id = J.S(vendor, "vendor_id");
+                string name = J.First(vendor, "vendor_name", "name", "display_name").NullIfEmpty() ?? Friendly(id).NullIfEmpty() ?? "Device maker";
+                if (id.Length == 0) { rows.Add(InfoRow(name, OnOff(J.B(vendor, "enabled")))); continue; }
+                rows.Add(SettingToggle(name, "Let " + name + " devices join your wifi during setup.", J.B(vendor, "enabled"), async delegate(bool on)
+                {
+                    if (!Confirm((on ? "Allow " : "Stop allowing ") + name + " to set up devices on this network?")) return;
+                    await Change("PUT", FeatureUrl("simple_setup/vendors/" + Uri.EscapeDataString(id)), J.Obj("enabled", on), true, name + " setup " + (on ? "allowed." : "turned off."));
+                }));
             }
+            if (rows.Count == 0) rows.Add(InfoRow("No device makers listed", null, "eero didn't return any brands for automatic setup on this network."));
+            Group(null, rows.ToArray());
         }
         private void IspSettingsPage()
         {
-            Sub("PPPoE & ISP VLAN settings"); ObjectCards(J.Obj("pppoe_enabled", J.Get(network, "pppoe_enabled"), "pppoe_username", J.Get(network, "pppoe_username"), "vlan", J.Get(network, "vlan")));
-            page.Children.Add(LocalButton("Edit ISP settings", delegate
+            Sub("Only needed if your internet provider gave you a PPPoE username and password, or a VLAN ID. Most connections don't use either.");
+            bool pppoe = J.B(network, "pppoe_enabled"); string user = J.S(network, "pppoe_username"); string vlan = J.S(network, "vlan");
+            Group(null,
+                SettingRow("PPPoE login", "Signs in to your ISP with a username and password. Common with some DSL and fiber providers.", pppoe ? "On" + (user.Length > 0 ? " · " + user : "") : "Off", RowAction("Change", EditIspSettings)),
+                SettingRow("VLAN tagging", "Some fiber providers require a VLAN ID on the internet connection.", vlan.Length > 0 ? "VLAN " + vlan : "Off", RowAction("Change", EditIspSettings)));
+        }
+        private void EditIspSettings()
+        {
             {
-                Edit("ISP settings", new[] { new Field("enabled", "Use PPPoE", J.B(network, "pppoe_enabled"), "bool"), new Field("replace", "Replace the saved PPPoE credentials", false, "bool"), new Field("username", "PPPoE username", J.S(network, "pppoe_username")), new Field("password", "New PPPoE password", null, "password"), new Field("vlan", "ISP VLAN ID (blank disables VLAN tagging)", J.S(network, "vlan")) }, async v =>
+                Edit("ISP settings", new[] {
+                    new Field("enabled", "Use PPPoE login", J.B(network, "pppoe_enabled"), "bool"),
+                    new Field("replace", "Enter a new PPPoE username and password", !J.B(network, "pppoe_enabled"), "bool").When("enabled", "True").Help("Leave off to keep the credentials eero already has."),
+                    new Field("username", "PPPoE username", J.S(network, "pppoe_username")).When("replace", "True"),
+                    new Field("password", "PPPoE password", null, "password").When("replace", "True"),
+                    new Field("vlan", "ISP VLAN ID", J.S(network, "vlan")).Help("Leave blank to turn VLAN tagging off.") }, async v =>
                 {
                     bool enabled = Flag(v, "enabled"), replace = Flag(v, "replace"); if (enabled && !J.B(network, "pppoe_enabled") && !replace) throw new ArgumentException("Enter new credentials when enabling PPPoE for the first time.");
                     object body = ExtendedContracts.Pppoe(enabled, V(v, "username"), V(v, "password"), replace, V(v, "vlan")); if (!Confirm("Apply ISP settings? Incorrect PPPoE credentials or VLAN settings can disconnect the network.")) return;
                     await Change("PUT", NetResource("settings"), body, false, "ISP settings updated.");
-                }, "Apply ISP settings", "Use the settings supplied by your ISP. This changes an existing network; physical setup of a new gateway still needs provisioning.");
-            }));
+                }, "Apply ISP settings", "Use the settings supplied by your ISP. Wrong values can disconnect your network.");
+            }
         }
         private async Task UploadPortalAsset(object config, bool logo)
         {
@@ -215,19 +265,23 @@ namespace EeroDesktop
         }
         private void DnsPerformancePage(object result)
         {
-            Sub("Measure DNS resolver performance from the eero gateway. A test does not change your DNS configuration.");
-            page.Children.Add(LocalButton("Start DNS performance test", delegate
-            {
-                string existing = String.Join(Environment.NewLine, J.List(J.Get(network, "dns", "custom", "ips")).Select(s => J.S(s)));
-                Edit("DNS performance test", new[] { new Field("servers", "DNS server IP addresses (one per line)", existing, "multiline"), new Field("port", "DNS server port", "53") }, async v =>
+            Sub("Check how quickly DNS servers answer your gateway eero. Faster servers can make websites start loading sooner. Testing doesn't change your settings.");
+            bool started = featureData.ContainsKey("dns_perf_action");
+            Group(null,
+                SettingRow("Run a test", "Compare the servers you use now with any others you want to try, for example 1.1.1.1 or 8.8.8.8.", null, RowAction("Start test", delegate
                 {
-                    int port; if (!Int32.TryParse(V(v, "port"), out port)) throw new ArgumentException("Enter a numeric DNS port."); object body = ExtendedContracts.DnsPerformance(V(v, "servers"), port);
-                    if (preview) throw new InvalidOperationException("Sign in to start a gateway test."); object kickoff = await api.Send("POST", FeatureUrl("dns_perf_test"), body);
-                    featureData["dns_perf_action"] = ExtendedContracts.Identifier(J.S(kickoff, "action_uuid")); await LoadFeature(currentPage); RenderPage(); SetNotice("DNS test requested. Use Refresh results until it finishes.");
-                }, "Start test");
-            }));
-            if (result != null) ObjectCards(result, "Resolver test results"); else page.Children.Add(Card(Text("No resolver test has been started during this session.")));
-            if (featureData.ContainsKey("dns_perf_action")) page.Children.Add(Button("Refresh results", async delegate { await LoadFeature(currentPage); RenderPage(); }));
+                    string existing = String.Join(Environment.NewLine, J.List(J.Get(network, "dns", "custom", "ips")).Select(s => J.S(s)));
+                    Edit("Test DNS servers", new[] { new Field("servers", "DNS servers to test (one per line)", existing, "multiline").Help("Leave as is to test the servers you use now."), new Field("port", "Port", "53").Help("Almost always 53.") }, async v =>
+                    {
+                        int port; if (!Int32.TryParse(V(v, "port"), out port)) throw new ArgumentException("Enter a numeric DNS port."); object body = ExtendedContracts.DnsPerformance(V(v, "servers"), port);
+                        if (preview) throw new InvalidOperationException("Sign in to start a gateway test."); object kickoff = await api.Send("POST", FeatureUrl("dns_perf_test"), body);
+                        featureData["dns_perf_action"] = ExtendedContracts.Identifier(J.S(kickoff, "action_uuid")); await LoadFeature(currentPage); RenderPage(); SetNotice("Test started. Choose Show results in a moment.");
+                    }, "Start test");
+                })),
+                started ? SettingRow("Results", "The test takes a few seconds. Show results again if it isn't finished.", null, RowActionAsync("Show results", async delegate { await LoadFeature(currentPage); RenderPage(); })) : null);
+            AddGroupHeading(page, "Results");
+            if (result != null) { var body = new StackPanel(); Details(body, result, 0); page.Children.Add(Card(body, 18)); }
+            else page.Children.Add(Card(Text(started ? "Waiting for results. Choose Show results above." : "No test yet. Run one above to see how fast each server answers.", 14, "#64738A"), 18));
         }
     }
     public static class PortalUpload

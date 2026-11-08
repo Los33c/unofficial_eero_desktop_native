@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace EeroDesktop
@@ -33,45 +34,56 @@ namespace EeroDesktop
     {
         private void IncomingAccessPage(object data)
         {
-            Sub("Incoming access invitations"); var invites = Entries(data, "promotions");
-            if (invites.Count == 0) page.Children.Add(Card(Text("No pending access invitations.")));
+            Sub("Networks that invited you to help manage them.");
+            var invites = Entries(data, "promotions"); var rows = new List<UIElement>();
             foreach (object raw in invites)
             {
-                object invite = raw; string id = J.S(invite, "invite_id"), net = J.S(invite, "network_id");
-                var p = new StackPanel(); p.Children.Add(Text(J.S(invite, "network_name"), 20, "#17263C", true)); p.Children.Add(Text("Requested access: " + J.S(invite, "invite_role"), 14, "#64738A"));
+                object invite = raw; string id = J.S(invite, "invite_id"), net = J.S(invite, "network_id"), role = J.S(invite, "invite_role");
+                string name = J.S(invite, "network_name").NullIfEmpty() ?? "A network";
+                var actions = new List<Button>();
                 if (id.Length > 0 && net.Length > 0)
                     foreach (bool decision in new[] { true, false })
                     {
                         bool accept = decision;
-                        p.Children.Add(Button(accept ? "Accept invitation" : "Decline invitation", async delegate
+                        var b = RowActionAsync(accept ? "Accept" : "Decline", async delegate
                         {
-                            if (!Confirm((accept ? "Accept" : "Decline") + " this access invitation for " + J.S(invite, "network_name") + "?")) return;
+                            if (!Confirm((accept ? "Accept" : "Decline") + " this access invitation for " + name + "?")) return;
                             await Change("POST", "/2.2/networks/" + ExtendedContracts.Identifier(net) + "/invites/response", RuntimeContracts.InvitationResponse(id, accept), false, accept ? "Access invitation accepted." : "Access invitation declined.");
-                        }));
+                        });
+                        if (accept) b.Style = (System.Windows.Style)FindResource("AccentButton");
+                        if (accept) CompactAction(b);
+                        actions.Add(b);
                     }
-                page.Children.Add(Card(p));
+                rows.Add(SettingRow(name, role == "admin" ? "Administrator: can change every setting on this network." : "Access: " + Friendly(role), null, actions.ToArray()));
             }
+            if (rows.Count == 0) rows.Add(InfoRow("No invitations", null, "When someone invites you to manage their network, it shows up here."));
+            Group(null, rows.ToArray());
         }
         private void AutomaticSetupPage(object data)
         {
-            Sub("Automatic eero setup"); string current = J.S(network, "auto_setup_mode");
-            page.Children.Add(Card(Text("Current mode: " + (current.NullIfEmpty() ?? "Not reported"))));
-            page.Children.Add(LocalButton("Automatic setup preference", delegate
+            Sub("New eeros you plug in can join this network by themselves. eero finds them through its cloud service.");
+            string current = J.S(network, "auto_setup_mode");
+            string[] modes = { "DEFAULT", "ZTS", "LTS", "OFF" }, labels = { "Provider default", "ZTS policy", "LTS policy", "Off" };
+            int index = Array.IndexOf(modes, current);
+            Group(null, SettingRow("Automatic setup", "Provider default suits most homes. ZTS and LTS are eero's automatic setup policies; use one only if your provider asks. Off means you add every eero yourself.", index >= 0 ? labels[index] : "Not reported", RowAction("Change", delegate
             {
-                Edit("Automatic eero setup", new[] { new Field("mode", "Mode", new[] { "OFF", "ZTS", "LTS", "DEFAULT" }.Contains(current) ? current : "DEFAULT", "choice", "OFF", "ZTS", "LTS", "DEFAULT") }, async v =>
+                Edit("Automatic setup", new[] { new Field("mode", "Mode", index >= 0 ? labels[index] : labels[0], "choice", labels).Help("If you're unsure, choose Provider default.") }, async v =>
                 {
-                    if (!Confirm("Change automatic setup for this network? OFF disables automatic setup; ZTS and LTS use eero's automatic setup policies; DEFAULT follows the provider default.")) return;
-                    await Change("PUT", FeatureUrl("auto_setup_mode"), RuntimeContracts.AutoSetup(V(v, "mode")), false, "Automatic setup preference updated.");
+                    string chosen = modes[Array.IndexOf(labels, V(v, "mode"))];
+                    if (!Confirm("Change automatic setup to " + V(v, "mode") + "?")) return;
+                    await Change("PUT", FeatureUrl("auto_setup_mode"), RuntimeContracts.AutoSetup(chosen), false, "Automatic setup set to " + V(v, "mode") + ".");
                 });
-            }));
-            page.Children.Add(Text("Discovered eeros", 20, "#17263C", true)); var found = Entries(data, "eeros");
-            if (found.Count == 0) page.Children.Add(Text("No cloud-discovered eeros were returned. Bluetooth discovery is also available under Add or replace eero.", 14, "#64738A"));
-            foreach (object raw in found)
+            })));
+            var rows = new List<UIElement>();
+            foreach (object raw in Entries(data, "eeros"))
             {
-                object eero = raw; var p = new StackPanel(); Details(p, eero, 0); string serial = J.S(eero, "serial");
-                if (serial.Length > 0) p.Children.Add(LocalButton("Add this eero", delegate { AddDiscoveredEero(serial); }));
-                page.Children.Add(Card(p));
+                object eero = raw; string serial = J.S(eero, "serial");
+                string reason = J.First(J.Get(eero, "ineligible_for_zts"), "reason", "message");
+                rows.Add(SettingRow(J.First(eero, "model", "serial").NullIfEmpty() ?? "eero", "Serial " + serial + (reason.Length > 0 ? " · Can't join automatically: " + reason : ""), null,
+                    serial.Length > 0 ? RowAction("Add", delegate { AddDiscoveredEero(serial); }) : null));
             }
+            if (rows.Count == 0) rows.Add(InfoRow("No new eeros found", null, "Plug in the new eero and wait a few minutes. You can also search with Bluetooth under Add or replace eero."));
+            Group("eeros waiting to join", rows.ToArray());
         }
         private void AddDiscoveredEero(string serial)
         {
@@ -84,78 +96,88 @@ namespace EeroDesktop
         }
         private void AccessoriesPage(object status)
         {
-            Sub("Accessories & cellular");
-            ObjectCards(status, "Accessory setup status");
-            object cellular = J.Get(network, "cellular_backup"); if (cellular != null) ObjectCards(cellular, "Cellular backup");
+            Sub("Add-on hardware such as cellular backup and phone adapters connected to your eeros.");
             var accessories = J.List(J.Get(network, "accessories"));
-            if (accessories.Count == 0) page.Children.Add(Text("No registered accessories were reported for this network.", 14, "#64738A"));
             foreach (object raw in accessories)
             {
-                object accessory = raw; var p = new StackPanel(); var photo = HardwareImage(accessory, 72); photo.HorizontalAlignment = System.Windows.HorizontalAlignment.Left; p.Children.Add(photo); p.Children.Add(Text(J.First(accessory, "name", "model"), 20, "#17263C", true)); Details(p, accessory, 0);
-                string serial = J.First(accessory, "dsn", "serial");
-                if (serial.Length > 0)
-                {
-                    p.Children.Add(Button("Refresh accessory details", async delegate { Info("Accessory", await Read(FeatureUrl("accessories/" + Uri.EscapeDataString(RuntimeContracts.Serial(serial))))); }));
-                    p.Children.Add(LocalButton("Remove accessory", delegate { Edit("Remove accessory", new[] { new Field("serial", "Type the accessory serial number to confirm") }, async v =>
+                object accessory = raw; string serial = J.First(accessory, "dsn", "serial"), eeroId = J.S(accessory, "eero_id");
+                var host = nodes.FirstOrDefault(n => J.S(n, "url").TrimEnd('/').Split('/').Last() == eeroId);
+                string state = J.B(accessory, "joined") ? "Connected" : J.B(accessory, "registered") ? "Registered, not connected" : "Not set up";
+                var header = new Grid { Margin = new System.Windows.Thickness(14, 12, 14, 4) }; header.ColumnDefinitions.Add(new ColumnDefinition { Width = new System.Windows.GridLength(84) }); header.ColumnDefinitions.Add(new ColumnDefinition());
+                var photo = HardwareImage(accessory, 64); photo.HorizontalAlignment = System.Windows.HorizontalAlignment.Left; header.Children.Add(photo);
+                var words = new StackPanel { VerticalAlignment = System.Windows.VerticalAlignment.Center }; var title = Text(J.First(accessory, "name", "model"), 18, "#17263C", true); title.Margin = new System.Windows.Thickness(0); words.Children.Add(title);
+                words.Children.Add(Text(J.S(accessory, "model") + (host != null ? " · Connected to " + J.First(host, "location", "model") : ""), 12, "#64738A")); System.Windows.Controls.Grid.SetColumn(words, 1); header.Children.Add(words);
+                Group(null, header,
+                    InfoRow("Status", state),
+                    serial.Length > 0 ? SettingRow("Serial number", null, serial, RowActionAsync("Details", async delegate { Info("Accessory", await Read(FeatureUrl("accessories/" + Uri.EscapeDataString(RuntimeContracts.Serial(serial))))); })) : null,
+                    eeroId.Length > 0 ? SettingRow("Phone lines", "Phone numbers linked to this accessory, if it's a phone adapter.", null, RowActionAsync("View", async delegate { Info("Phone lines", await Read(FeatureUrl("sip_config_associations/" + ExtendedContracts.Identifier(eeroId)))); })) : null,
+                    serial.Length > 0 ? SettingRow("Remove accessory", "Its cellular backup or phone service may stop working.", null, RowAction("Remove", delegate { Edit("Remove accessory", new[] { new Field("serial", "Type the serial number to confirm").Help("Serial: " + serial) }, async v =>
                     {
                         if (V(v, "serial").Trim() != serial) throw new ArgumentException("The accessory serial number does not match.");
                         if (!Confirm("Remove this accessory? Its cellular backup or phone service may stop working.")) return;
                         await Change("DELETE", FeatureUrl("accessories/" + Uri.EscapeDataString(RuntimeContracts.Serial(serial))), null, false, "Accessory removed.");
-                    }, "Remove accessory"); }));
-                }
-                string eeroId = J.S(accessory, "eero_id"); if (eeroId.Length > 0) p.Children.Add(Button("Phone line associations", async delegate { Info("Phone lines", await Read(FeatureUrl("sip_config_associations/" + ExtendedContracts.Identifier(eeroId)))); }));
-                page.Children.Add(Card(p));
+                    }, "Remove accessory"); }, true)) : null);
             }
-            page.Children.Add(Text("New cellular service activation and physical accessory pairing require the provider's setup flow. Existing registration, connection and phone-line details are shown when your network supports them.", 13, "#64738A"));
+            if (accessories.Count == 0) Group(null, InfoRow("No accessories", null, "No add-on hardware is registered on this network."));
+            object cellular = J.Get(network, "cellular_backup"); if (cellular != null) { AddGroupHeading(page, "Cellular backup"); ObjectCards(cellular); }
+            TechnicalDetails(status);
+            page.Children.Add(Text("Activating new cellular service or pairing new accessories still happens through your provider's setup.", 13, "#64738A"));
         }
         private void PlacementPage()
         {
-            Sub("Placement tests"); page.Children.Add(Text("Run a cloud placement test for a configured eero, then retrieve its signal and placement rating. Results can take a little time to appear.", 14, "#64738A"));
+            Sub("Check whether each eero is in a good spot. Run a test, wait a minute, then view the results.");
+            var rows = new List<UIElement>();
             foreach (object raw in nodes)
             {
                 object node = raw; string serial = J.S(node, "serial"); if (serial.Length == 0) continue;
-                var p = new StackPanel(); p.Children.Add(Text(J.First(node, "location", "model"), 20, "#17263C", true));
                 string url = "/2.3/networks/" + NetworkId + "/placement_test/" + Uri.EscapeDataString(RuntimeContracts.Serial(serial));
-                p.Children.Add(Button("Run placement test", async delegate
-                {
-                    if (!Confirm("Run a placement test for " + J.First(node, "location", "model") + "?")) return;
-                    await Change("POST", url, null, false, "Placement test requested. Use View results after the test finishes.");
-                }));
-                p.Children.Add(Button("View results", async delegate { Info("Placement results", await Read(url)); })); page.Children.Add(Card(p));
+                rows.Add(SettingRow(J.First(node, "location", "model"), (J.B(node, "gateway") ? "Gateway · " : "") + J.S(node, "model"), null,
+                    RowActionAsync("Run test", async delegate
+                    {
+                        if (!Confirm("Run a placement test for " + J.First(node, "location", "model") + "?")) return;
+                        await Change("POST", url, null, false, "Placement test started. Choose View results in a minute.");
+                    }),
+                    RowActionAsync("View results", async delegate { Info("Placement results", await Read(url)); })));
             }
+            if (rows.Count == 0) rows.Add(InfoRow("No eeros to test", null, "eero didn't return serial numbers for your eeros."));
+            Group(null, rows.ToArray());
         }
         private void VpnPage()
         {
-            Sub("VPN powered by Guardian");
+            Sub("A VPN from Guardian that protects this PC on any network, such as public wifi. It must be included with your eero plan.");
             object availability; featureData.TryGetValue("guardian_availability", out availability);
-            page.Children.Add(Card(Text(VpnContracts.EligibilityMessage(availability), 15)));
-            page.Children.Add(Text("Guardian must be included with your eero service. Some internet providers do not offer this benefit. Check eligibility before installing or registering a device.", 13, "#64738A"));
-            page.Children.Add(Button("Check VPN eligibility", async delegate { object result = await LoadGuardianAvailability(); RenderPage(); SetNotice(VpnContracts.EligibilityMessage(result), result is ApiException); }));
+            Group("Eligibility", SettingRow("VPN included with your plan?", VpnContracts.EligibilityMessage(availability), null,
+                RowActionAsync("Check", async delegate { object result = await LoadGuardianAvailability(); RenderPage(); SetNotice(VpnContracts.EligibilityMessage(result), result is ApiException); })));
             VpnControls();
-            page.Children.Add(Button("View Guardian sign-in details", async delegate { await GuardianCredentials(); }));
-            ActionRow(LocalButton("Activate or manage Guardian", delegate { OpenServiceWindow("Guardian VPN", "https://guardianapp.com/login?connect-api-env=wifi-company-prod"); }), LocalButton("Guardian Windows download", delegate { Official("https://guardianapp.com/windows/latest/"); }), LocalButton("Windows VPN setup instructions", delegate { OpenServiceWindow("Guardian setup", "https://eero.com/support/articles/how-do-i-set-up-vpn-powered-by-guardian"); }));
-            page.Children.Add(Text("Guardian's own Windows app is also available through the download above.", 13, "#64738A"));
+            Group("Guardian account & help",
+                SettingRow("Guardian sign-in details", "Your login for Guardian's own app or website.", null, RowActionAsync("Show", GuardianCredentials)),
+                SettingRow("Guardian account", "Activate or manage your Guardian account on their website.", null, RowAction("Open ↗", delegate { OpenServiceWindow("Guardian VPN", "https://guardianapp.com/login?connect-api-env=wifi-company-prod"); })),
+                SettingRow("Guardian's Windows app", "Prefer Guardian's own app? Download it instead of using this page.", null, RowAction("Download ↗", delegate { Official("https://guardianapp.com/windows/latest/"); })),
+                SettingRow("Setup instructions", "eero's step-by-step guide to the VPN.", null, RowAction("Open ↗", delegate { OpenServiceWindow("Guardian setup", "https://eero.com/support/articles/how-do-i-set-up-vpn-powered-by-guardian"); })));
         }
         private void SubscriptionWebPage()
         {
-            Sub("Manage subscriptions & purchases");
-            page.Children.Add(Card(Text("Open eero's subscription service with a temporary account sign-in. Review prices, terms and payment details in the service window before submitting anything.", 15)));
-            ActionRow(Button("Manage subscription", async delegate { await OpenPaymentService("MANAGE_SUBSCRIPTION"); }), Button("Manage purchases", async delegate { await OpenPaymentService("MANAGE_PURCHASES"); }), Button("Available add-ons", async delegate { await OpenPaymentService("MOBILE_ADDON_PAYMENT"); }));
-            page.Children.Add(LocalButton("Manage a Google Play subscription", delegate
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://play.google.com/store/account/subscriptions") { UseShellExecute = true });
-            }));
-            page.Children.Add(Text("For a subscription purchased through Google Play, sign in with the Google account that made the purchase. Google Play management opens in your browser.", 13, "#64738A"));
+            Sub("These open eero's payment service in a separate window, signed in for you. Check prices and terms there before you buy or cancel anything.");
+            Group("Bought through eero",
+                SettingRow("Subscription", "Change, renew or cancel your eero plan and payment method.", null, RowActionAsync("Manage ↗", async delegate { await OpenPaymentService("MANAGE_SUBSCRIPTION"); })),
+                SettingRow("Purchases", "Receipts and things you've bought.", null, RowActionAsync("View ↗", async delegate { await OpenPaymentService("MANAGE_PURCHASES"); })),
+                SettingRow("Add-ons", "Extras you can add to your plan.", null, RowActionAsync("Browse ↗", async delegate { await OpenPaymentService("MOBILE_ADDON_PAYMENT"); })));
+            Group("Bought somewhere else",
+                SettingRow("Google Play subscription", "Opens Google Play in your browser. Sign in with the Google account that made the purchase.", null, RowAction("Open ↗", delegate
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://play.google.com/store/account/subscriptions") { UseShellExecute = true });
+                })));
         }
         private void BusinessInsightsPage()
         {
-            Sub("eero Insight"); page.Children.Add(Text("Open the official network management portal. Access depends on your business account and permissions.", 15));
-            page.Children.Add(Button("Open eero Insight", async delegate
+            Sub("eero's website for businesses to manage their networks, guest portals and staff access. You need a business account with permission to use it.");
+            Group(null, SettingRow("eero Insight", "Opens in its own window, already signed in to this network.", null, RowActionAsync("Open ↗", async delegate
             {
                 if (preview) throw new InvalidOperationException("Sign in to open eero Insight.");
                 object temporary = await api.Send("GET", "/2.2/login/temporary");
                 OpenServiceWindow("eero Insight", "https://insight.eero.com/login/mobile?next=/networks/" + NetworkId, ServiceLinks.TokenHeader(J.S(temporary, "temporary_token")));
-            }));
+            })));
+            RelatedPagesFor("Settings/Business guest wifi");
         }
     }
 }

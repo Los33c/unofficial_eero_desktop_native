@@ -47,8 +47,10 @@ namespace EeroDesktop
         {
             string scratch = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(output)), "session-tests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(scratch);
+            // Tests must never touch the user's real availability notes.
+            FeatureAvailability.StorePath = System.IO.Path.Combine(scratch, "availability.json"); FeatureAvailability.Reset();
             int exit = 0;
-            try { RunAsync(scratch).GetAwaiter().GetResult(); FeatureChecks(); ExtendedChecks().GetAwaiter().GetResult(); RuntimeChecks(scratch).GetAwaiter().GetResult(); EverydayChecks(scratch); ServiceIntegrationChecks(scratch).GetAwaiter().GetResult(); AmazonNativeChecks(scratch).GetAwaiter().GetResult(); UiChecks(); ThemeChecks(); NativeChecks(); }
+            try { RunAsync(scratch).GetAwaiter().GetResult(); FeatureChecks(); ExtendedChecks().GetAwaiter().GetResult(); RuntimeChecks(scratch).GetAwaiter().GetResult(); EverydayChecks(scratch); ServiceIntegrationChecks(scratch).GetAwaiter().GetResult(); AmazonNativeChecks(scratch).GetAwaiter().GetResult(); ApkChecks(scratch).GetAwaiter().GetResult(); UiChecks(); ThemeChecks(); NativeChecks(); ApkUiChecks(); }
             catch (Exception e) { results.Add(e.ToString()); exit = 1; }
             finally
             {

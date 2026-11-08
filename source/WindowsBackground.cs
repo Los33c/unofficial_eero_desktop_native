@@ -129,27 +129,28 @@ namespace EeroDesktop
         }
         private void WindowsNotificationsPage()
         {
-            Sub("Windows notifications");
-            ObjectCards(J.Obj("windows_alerts", UiPreferences.Notifications, "keep_running_when_closed", UiPreferences.Background, "start_with_windows", UiPreferences.StartWithWindows, "monitor_all_networks", UiPreferences.AllNetworks));
-            page.Children.Add(Text("Alerts check eero's notification history every minute while this app runs. Start with Windows can resume the app in the notification area after you sign in to Windows. Remember your eero session to restore it automatically.", 14, "#64738A"));
-            page.Children.Add(LocalButton("Configure Windows notifications", delegate
+            Sub("How this app alerts you on Windows. These settings are saved on this PC only.");
+            bool alerts = UiPreferences.Notifications, background = UiPreferences.Background, startup = UiPreferences.StartWithWindows, all = UiPreferences.AllNetworks;
+            Group(null,
+                SettingToggle("Windows alerts", "Show a Windows notification when eero reports something new. Checks every minute while the app runs.", alerts, async delegate(bool on) { await SaveWindowsPreferences(on, background, startup, all); }),
+                SettingToggle("Keep running when closed", "Stay in the notification area after you close the window, so alerts keep coming.", background || startup, async delegate(bool on) { await SaveWindowsPreferences(alerts, on, on && startup, all); }),
+                SettingToggle("Start with Windows", "Open quietly in the notification area when you sign in to Windows. Keep the app in its current folder.", startup, async delegate(bool on) { await SaveWindowsPreferences(alerts, background || on, on, all); }),
+                SettingToggle("Monitor all networks", "Alert about every network in your account, not just the one selected.", all, async delegate(bool on) { await SaveWindowsPreferences(alerts, background, startup, on); }));
+            page.Children.Add(Text("Choosing Exit on the tray menu stops alerts until the next launch. Remember your eero session when you sign in so the app can restore it automatically.", 13, "#64738A"));
+        }
+        private async Task SaveWindowsPreferences(bool alerts, bool background, bool startup, bool all)
+        {
+            if (preview) throw new InvalidOperationException("Preview mode does not change Windows startup or your preferences.");
+            bool oldEnabled = UiPreferences.Notifications, oldBackground = UiPreferences.Background, oldStartup = UiPreferences.StartWithWindows, oldAll = UiPreferences.AllNetworks;
+            try
             {
-                Edit("Windows notifications", new[] { new Field("enabled", "Show Windows network alerts", UiPreferences.Notifications, "bool"), new Field("background", "Keep running in the notification area when the window closes", UiPreferences.Background, "bool"), new Field("startup", "Start in the notification area when I sign in to Windows", UiPreferences.StartWithWindows, "bool"), new Field("all", "Monitor all networks in this account", UiPreferences.AllNetworks, "bool") }, async v =>
+                StartupRegistration.Apply(new WindowsStartupStore(), System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName, startup, delegate
                 {
-                    if (preview) throw new InvalidOperationException("Preview mode does not change Windows startup or your preferences.");
-                    bool oldEnabled = UiPreferences.Notifications, oldBackground = UiPreferences.Background, oldStartup = UiPreferences.StartWithWindows, oldAll = UiPreferences.AllNetworks;
-                    try
-                    {
-                        StartupRegistration.Apply(new WindowsStartupStore(), System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName, Flag(v, "startup"), delegate
-                        {
-                            UiPreferences.Notifications = Flag(v, "enabled"); UiPreferences.StartWithWindows = Flag(v, "startup"); UiPreferences.Background = Flag(v, "background") || UiPreferences.StartWithWindows; UiPreferences.AllNetworks = Flag(v, "all"); UiPreferences.Save();
-                        });
-                    }
-                    catch { UiPreferences.Notifications = oldEnabled; UiPreferences.Background = oldBackground; UiPreferences.StartWithWindows = oldStartup; UiPreferences.AllNetworks = oldAll; throw; }
-                    ConfigureDesktopNotifications(); SetNotice("Windows notification and startup preferences saved."); await Task.FromResult(0);
+                    UiPreferences.Notifications = alerts; UiPreferences.StartWithWindows = startup; UiPreferences.Background = background || startup; UiPreferences.AllNetworks = all; UiPreferences.Save();
                 });
-            }));
-            page.Children.Add(Text("Startup is optional and starts disabled. Keep the app in its current folder after enabling startup. Exit on the tray menu stops alerts until the next launch. Closing Windows or signing out stops monitoring.", 13, "#64738A"));
+            }
+            catch { UiPreferences.Notifications = oldEnabled; UiPreferences.Background = oldBackground; UiPreferences.StartWithWindows = oldStartup; UiPreferences.AllNetworks = oldAll; throw; }
+            ConfigureDesktopNotifications(); RenderPage(); SetNotice("Windows notification preferences saved."); await Task.FromResult(0);
         }
     }
 }
