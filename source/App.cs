@@ -19,7 +19,7 @@ using System.Windows.Threading;
 [assembly: System.Reflection.AssemblyCompany("Carlos B.")]
 [assembly: System.Reflection.AssemblyProduct("eero Desktop (Unofficial)")]
 [assembly: System.Reflection.AssemblyDescription("Independent eero network manager for Windows. Made by: Carlos B. (Los33).")]
-[assembly: System.Reflection.AssemblyVersion("1.1.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.1.1.0")]
 
 namespace EeroDesktop
 {
@@ -132,7 +132,7 @@ namespace EeroDesktop
             if (Application.Current.TryFindResource("NavigationButton") == null) Program.ApplyTheme();
             statusPath = diagnosticsPath;
             preview = isPreview; backgroundLaunch = startInBackground && !isPreview;
-            Title = "eero Desktop · Unofficial · v1.1";
+            Title = "eero Desktop · Unofficial · v1.1.1";
             Icon = ApplicationIcon.WindowImage;
             Width = 1360; Height = 880; MinWidth = 1040; MinHeight = 720;
             UseLayoutRounding = true;

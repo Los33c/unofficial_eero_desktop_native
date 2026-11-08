@@ -55,9 +55,9 @@ namespace EeroDesktop
             var mutexAccess = new MutexSecurity(); mutexAccess.AddAccessRule(new MutexAccessRule(user, MutexRights.FullControl, AccessControlType.Allow));
             var eventAccess = new EventWaitHandleSecurity(); eventAccess.AddAccessRule(new EventWaitHandleAccessRule(user, EventWaitHandleRights.FullControl, AccessControlType.Allow));
             string name = @"Local\EeroDesktop-" + scope;
-            mutex = new Mutex(false, name + "-instance", out created, mutexAccess);
+            mutex = MutexAcl.Create(false, name + "-instance", out created, mutexAccess);
             try { IsOwner = mutex.WaitOne(0); } catch (AbandonedMutexException) { IsOwner = true; }
-            wake = new EventWaitHandle(false, EventResetMode.AutoReset, name + "-show", out created, eventAccess);
+            wake = EventWaitHandleAcl.Create(false, EventResetMode.AutoReset, name + "-show", out created, eventAccess);
         }
         public void Listen(Action show) { if (!IsOwner) throw new InvalidOperationException("This process does not own the application window."); listener = ThreadPool.RegisterWaitForSingleObject(wake, delegate { show(); }, null, Timeout.Infinite, false); }
         public void ShowOwner() { wake.Set(); }

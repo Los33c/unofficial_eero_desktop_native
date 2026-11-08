@@ -460,7 +460,7 @@ namespace EeroDesktop
             string os = Environment.OSVersion.Version.Build >= 22000 ? "Windows 11" : "Windows 10";
             string webView = "Not installed";
             try { webView = Microsoft.Web.WebView2.Core.CoreWebView2Environment.GetAvailableBrowserVersionString(); } catch (Exception) { }
-            string summary = "eero Desktop " + versionText + (built.Length > 0 ? " (built " + built + ")" : "") + Environment.NewLine + os + " build " + Environment.OSVersion.Version.Build + (Environment.Is64BitOperatingSystem ? " · 64-bit" : " · 32-bit") + Environment.NewLine + ".NET Framework " + Environment.Version + Environment.NewLine + "WebView2 " + webView;
+            string summary = "eero Desktop " + versionText + (built.Length > 0 ? " (built " + built + ")" : "") + Environment.NewLine + os + " build " + Environment.OSVersion.Version.Build + (Environment.Is64BitOperatingSystem ? " · 64-bit" : " · 32-bit") + Environment.NewLine + ".NET " + Environment.Version + Environment.NewLine + "WebView2 " + webView;
             Group("This copy",
                 InfoRow("Version", versionText + (built.Length > 0 ? " · built " + built : "")),
                 InfoRow("Windows", os + " (build " + Environment.OSVersion.Version.Build + ")" + (Environment.Is64BitOperatingSystem ? " · 64-bit" : "")),

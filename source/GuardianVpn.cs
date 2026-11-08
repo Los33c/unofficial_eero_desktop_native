@@ -81,7 +81,6 @@ namespace EeroDesktop
         private readonly HttpClient http;
         public GuardianApi(HttpMessageHandler handler = null)
         {
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             http = new HttpClient(handler ?? new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate });
             http.Timeout = TimeSpan.FromSeconds(35);
         }

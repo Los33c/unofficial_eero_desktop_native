@@ -1,0 +1,44 @@
+<Project>
+  <!-- Explicit SDK imports so obj/ can live under .build/ (it must be set before Sdk.props). -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>.build\obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>5</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>EeroDesktop</AssemblyName>
+    <RootNamespace>EeroDesktop</RootNamespace>
+    <ApplicationManifest>source\app.manifest</ApplicationManifest>
+    <ApplicationIcon>assets\app-icon.ico</ApplicationIcon>
+    <Optimize>true</Optimize>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <BaseOutputPath>.build\bin\</BaseOutputPath>
+    <!-- Source files are listed explicitly below. -->
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Version attributes are in source\App.cs. -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Windows-only app; the platform attribute is not generated when assembly info is off. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="source\*.cs" />
+    <EmbeddedResource Include="assets\app-icon.ico" LogicalName="EeroDesktop.AppIcon.ico" />
+    <EmbeddedResource Include="assets\app-icon.png" LogicalName="EeroDesktop.AppIcon.png" />
+    <EmbeddedResource Include="assets\products\*.png" LogicalName="EeroDesktop.Products.%(Filename)%(Extension)" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

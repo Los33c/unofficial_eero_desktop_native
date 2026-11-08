@@ -107,7 +107,7 @@ namespace EeroDesktop
             accountLabel = Text(preview ? "Preview account" : J.First(account, "name", "email", "phone"), 12); accountLabel.TextWrapping = TextWrapping.NoWrap; accountLabel.TextTrimming = TextTrimming.CharacterEllipsis; accountLabel.VerticalAlignment = VerticalAlignment.Center; accountLabel.Margin = new Thickness(6, 0, 0, 0); Grid.SetColumn(accountLabel, 1); accountRow.Children.Add(accountLabel); accountButton.Content = accountRow; accountPanel.Children.Add(accountButton);
             var signout = Button(preview ? "Back to sign in" : "Sign out", async delegate { timer.Stop(); CloseAccountWindows(); if (!preview) await api.Logout(); preview = false; ClearData(); ShowLogin(false); SetNotice("Signed out. Your saved session has been cleared."); });
             signout.Style = (Style)FindResource("QuietButton"); signout.Margin = new Thickness(0, 0, 0, 12); accountPanel.Children.Add(signout);
-            accountPanel.Children.Add(Text("Unofficial client · v1.1", 10, "#64738A"));
+            accountPanel.Children.Add(Text("Unofficial client · v1.1.1", 10, "#64738A"));
 
             var main = new Grid(); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); main.RowDefinitions.Add(new RowDefinition()); main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             var contentFrame = new Border { Background = Brush("#F4F6FA"), BorderBrush = Brush("#E5EAF3"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 8, 8, 8), Child = main }; Grid.SetColumn(contentFrame, 1); root.Children.Add(contentFrame);

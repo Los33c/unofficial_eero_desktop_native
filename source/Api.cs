@@ -10,14 +10,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
 
 namespace EeroDesktop
 {
     public static class J
     {
-        public static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024, RecursionLimit = 100 };
-        private static readonly object JsonSync = new object();
         public static Dictionary<string, object> Obj(params object[] pairs)
         {
             var d = new Dictionary<string, object>();
@@ -52,8 +49,8 @@ namespace EeroDesktop
             foreach (string k in keys) { string s = S(o, k); if (s.Length > 0) return s; }
             return "";
         }
-        public static object Parse(string s) { lock (JsonSync) return Serializer.DeserializeObject(s); }
-        public static string Stringify(object o) { lock (JsonSync) return Serializer.Serialize(o); }
+        public static object Parse(string s) { return JsonCodec.Parse(s); }
+        public static string Stringify(object o) { return JsonCodec.Stringify(o); }
     }
 
     public sealed class ApiException : Exception
@@ -131,10 +128,9 @@ namespace EeroDesktop
         public EeroApi(SessionStore session, HttpMessageHandler handler = null)
         {
             store = session;
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             http = new HttpClient(handler ?? new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate });
             http.Timeout = TimeSpan.FromSeconds(30);
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("EeroDesktop/1.1.0 (Windows; unofficial)");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("EeroDesktop/1.1.1 (Windows; unofficial)");
             http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         }
         public bool Restore() { string saved = store.Load(); try { token = saved == null ? null : ValidToken(saved); } catch (InvalidDataException) { store.Clear(); token = null; } Remember = SignedIn; return SignedIn; }

@@ -1,6 +1,6 @@
-<img width="2560" height="1440" alt="01-hero-dark" src="https://github.com/user-attachments/assets/8d484d81-1c38-45ba-9c28-c19615ac641f" />
+![eero Desktop home screen, dark theme](screenshots/home-dark.png)
 
-# eero Desktop (Unofficial) — v1.1.0
+# eero Desktop (Unofficial)
 
 An independent, native desktop app for managing an eero network on **Windows, Linux and macOS**. It has a desktop layout, light and dark themes, device artwork, and Amazon or email/phone sign-in.
 
@@ -8,13 +8,15 @@ Made by: **Carlos B. (Los33)**
 
 This project is not affiliated with or endorsed by Amazon or eero. Feature availability depends on your hardware, account permissions and service entitlements. See [FEATURE-COVERAGE.txt](FEATURE-COVERAGE.txt) for the feature catalog and current limitations.
 
-| Platform | Built with | Packages |
-| --- | --- | --- |
-| Windows 10 / 11 | C# 5, .NET Framework 4.8, WPF, WebView2 | `.zip` |
-| Linux (x64, ARM64) | C# / .NET 10, GTK 4 + libadwaita, WebKitGTK | `.deb`, AppImage, `.tar.gz` |
-| macOS 13+ (Apple silicon, Intel) | Swift, SwiftUI + AppKit, WKWebView | universal, arm64 and x86_64 `.app` zips |
+| Platform | Version | Built with | Packages |
+| --- | --- | --- | --- |
+| Windows 10 / 11 | 1.1.1 | C# 5, .NET 10, WPF, WebView2 | `.zip` |
+| Linux (x64, ARM64) | 1.1.0 | C# / .NET 10, GTK 4 + libadwaita, WebKitGTK | `.deb`, AppImage, `.tar.gz` |
+| macOS 13+ (Apple silicon, Intel) | 1.1.0 | Swift, SwiftUI + AppKit, WKWebView | universal, arm64 and x86_64 `.app` zips |
 
 ## Screenshots
+
+These are from the Windows app.
 
 | Light | Dark |
 | --- | --- |
@@ -22,15 +24,15 @@ This project is not affiliated with or endorsed by Amazon or eero. Feature avail
 | ![Devices, light theme](screenshots/devices-light.png) | ![Devices, dark theme](screenshots/devices-dark.png) |
 | ![Settings, light theme](screenshots/settings-light.png) | ![Settings, dark theme](screenshots/settings-dark.png) |
 
-More in [screenshots/](screenshots/).
+More in [screenshots/](screenshots/). They were all taken with demo data.
 
 ## Download
 
-Get the latest build from the [Releases page](https://github.com/Los33c/unofficial_eero_desktop_native/releases/latest).
+Windows is on the [latest release](https://github.com/Los33c/unofficial_eero_desktop_native/releases/latest). Linux and macOS are on the [v1.1 release](https://github.com/Los33c/unofficial_eero_desktop_native/releases/tag/eero-unofficial-desktop-native).
 
 | System | File |
 | --- | --- |
-| Windows | `eero-Desktop-1.1.0-windows.zip` |
+| Windows | `eero-Desktop-1.1.1-windows.zip` |
 | Debian / Ubuntu (Intel/AMD) | `eero-desktop_1.1.0_amd64.deb` |
 | Debian / Ubuntu (ARM) | `eero-desktop_1.1.0_arm64.deb` |
 | Any Linux (Intel/AMD) | `eero-desktop-1.1.0-x86_64.AppImage` or `eero-desktop-1.1.0-linux-x64.tar.gz` |
@@ -38,15 +40,15 @@ Get the latest build from the [Releases page](https://github.com/Los33c/unoffici
 | macOS (any Mac) | `eero-Desktop-1.1.0-macOS-universal.zip` |
 | macOS (one kind of Mac) | `eero-Desktop-1.1.0-macOS-arm64.zip` (Apple silicon) or `-x86_64.zip` (Intel) |
 
-Each platform's release includes a `SHA256SUMS` file for checking downloads.
-
 ## Install and run
 
 ### Windows
 
-Requires Windows 10 or 11 (64-bit), .NET Framework 4.8 and the Microsoft Edge WebView2 Runtime.
+You need Windows 10 or 11 (64-bit), the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) and the Microsoft Edge WebView2 Runtime. Most Windows machines already have WebView2.
 
-Extract the **entire** zip and open `EeroDesktop.exe`. Keep its DLLs, `EeroDesktop.exe.config` and the `runtimes` folder together. Close older copies first. Network management does not need administrator rights; installing and connecting the optional VPN component asks for Windows administrator approval.
+Extract the **entire** zip and open `EeroDesktop.exe`. Keep the DLLs, the two `EeroDesktop.*.json` files and the `runtimes` folder next to it, and close any older copy first. There's no installer, it runs from wherever you put it.
+
+Network management does not need administrator rights. Installing and connecting the optional VPN component will ask for Windows administrator approval.
 
 ### Linux
 
@@ -97,20 +99,14 @@ Do not commit account sessions, browser profiles, verification codes or VPN conf
 
 ### Windows
 
-Requires Windows PowerShell 5.1 or PowerShell 7. The build uses the C# compiler that ships with .NET Framework; Visual Studio and the modern .NET SDK are not needed.
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Visual Studio isn't required.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -OutputDirectory .\bin
 .\bin\EeroDesktop.exe
 ```
 
-The script compiles every C# file in `source`, embeds the app icons and product images, and copies the runtime DLLs, `runtimes` folder, configuration and WebView2 license into the output folder. Without `-OutputDirectory`, `EeroDesktop.exe` is written to the repository folder itself.
-
-The first build downloads `Microsoft.Windows.SDK.Contracts` `10.0.19041.1` from NuGet into `.build`, and later builds reuse it. These contracts are only needed to compile. To build offline, point the script at an extracted copy:
-
-```powershell
-.\Build.ps1 -OutputDirectory .\bin -WindowsMetadataDirectory 'C:\path\to\contracts\ref\netstandard2.0'
-```
+The first build pulls WebView2, QRCoder and ServiceController from NuGet, so it needs an internet connection. Without `-OutputDirectory`, the app is written to the repository folder itself. The code has to stay C# 5, the project file enforces that.
 
 ### Linux
 
@@ -156,9 +152,9 @@ Linux/out/publish/linux-x64/eero-desktop --self-test results.txt
 "MacOS/out/universal/eero Desktop.app/Contents/MacOS/EeroDesktop" --self-test results.txt
 ```
 
-To open the interface with demonstration data and no account, run `EeroDesktop.exe --preview` on Windows, `dotnet run --project Linux/src -- --preview` on Linux, or `swift build && .build/debug/EeroDesktop --preview` from `MacOS` on a Mac.
+To open the interface with demo data and no account, run `EeroDesktop.exe --preview` on Windows, `dotnet run --project Linux/src -- --preview` on Linux, or `swift build && .build/debug/EeroDesktop --preview` from `MacOS` on a Mac.
 
-The v1.1.0 release builds passed 904 checks on Windows, 910 on Linux and 563 on macOS. Self-tests do not prove that every account-specific service or hardware workflow works with a live account.
+The Windows 1.1.1 build passed all 904 checks. The 1.1.0 builds passed 910 on Linux and 563 on macOS. Self-tests do not prove that every account-specific service or hardware workflow works with a live account.
 
 ## Repository contents
 
@@ -166,17 +162,14 @@ The v1.1.0 release builds passed 904 checks on Windows, 910 on Linux and 563 on 
 | --- | --- |
 | `source/` | Windows app code, built-in tests and Windows manifest |
 | `assets/` | App icon, product images and artwork source records |
-| `runtimes/` | WebView2 native loaders for Windows x64, x86 and ARM64 |
-| `QRCoder.dll`, `Microsoft.Web.WebView2.*.dll` | Bundled libraries for the Windows build |
-| `EeroDesktop.exe.config` | .NET Framework runtime configuration |
-| `Build.ps1` | Windows build and packaging script |
+| `EeroDesktop.csproj` | Windows project file and NuGet package list |
+| `Build.ps1` | Windows build script |
 | `Linux/` | Linux app: `src/` (.NET project), `assets/`, `packaging/` (desktop entry, metainfo, polkit policy, installer) and `build.sh` |
 | `MacOS/` | macOS app: `Sources/`, `Resources/`, `Package.swift` and `build.sh` |
-| `screenshots/` | Screenshots taken with demonstration data |
+| `screenshots/` | Screenshots taken with demo data |
+| `FEATURE-COVERAGE.txt` | Feature catalog and known limitations |
 | `LICENSE` | Project license (AGPL-3.0) |
 | `THIRD-PARTY-NOTICES.txt`, `LICENSE-*.txt` | Dependency notices and licenses |
-
-The bundled Windows libraries and native loaders are required to build; keep them in the repository. Build outputs and caches are excluded by `.gitignore`.
 
 ## License
 

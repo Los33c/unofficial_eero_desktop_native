@@ -117,7 +117,7 @@ namespace EeroDesktop
             var security = new DirectorySecurity(); security.SetAccessRuleProtection(true, false);
             security.AddAccessRule(new FileSystemAccessRule(WindowsIdentity.GetCurrent().User, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
             security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-            Directory.SetAccessControl(UserDirectory, security);
+            new DirectoryInfo(UserDirectory).SetAccessControl(security);
         }
         public static async Task<object> Control(string action, string scope, object profile = null)
         {
@@ -129,7 +129,7 @@ namespace EeroDesktop
             store.Save(J.Stringify(J.Obj("action", action, "scope", scope, "created", DateTime.UtcNow.ToString("o"), "profile", profile)));
             try
             {
-                string exe = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                string exe = Environment.ProcessPath;
                 using (var process = Process.Start(new ProcessStartInfo(exe, "--vpn-control " + id) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden })) await Task.Run(delegate { process.WaitForExit(); });
                 string resultFile = Path.Combine(UserDirectory, id + ".result");
                 if (!File.Exists(resultFile)) throw new InvalidOperationException("Windows VPN permission was cancelled or the helper did not complete.");
@@ -218,11 +218,11 @@ namespace EeroDesktop
             if (Directory.Exists(MachineDirectory))
             {
                 if ((File.GetAttributes(MachineDirectory) & FileAttributes.ReparsePoint) != 0) throw new IOException("The system VPN directory cannot be a link.");
-                var owner = Directory.GetAccessControl(MachineDirectory).GetOwner(typeof(SecurityIdentifier));
+                var owner = new DirectoryInfo(MachineDirectory).GetAccessControl().GetOwner(typeof(SecurityIdentifier));
                 if (!owner.Equals(admins) && !owner.Equals(system)) throw new IOException("The system VPN directory has an unexpected owner.");
-                Directory.SetAccessControl(MachineDirectory, security);
+                new DirectoryInfo(MachineDirectory).SetAccessControl(security);
             }
-            else Directory.CreateDirectory(MachineDirectory, security);
+            else security.CreateDirectory(MachineDirectory);
         }
         [StructLayout(LayoutKind.Sequential)] private struct Blob { public int Length; public IntPtr Data; }
         [DllImport("crypt32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool CryptProtectData(ref Blob input, string description, IntPtr entropy, IntPtr reserved, IntPtr prompt, int flags, out Blob output);

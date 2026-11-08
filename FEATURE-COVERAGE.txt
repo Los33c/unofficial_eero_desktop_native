@@ -1,4 +1,9 @@
-eero Desktop v1.0 - feature coverage
+eero Desktop v1.1.1 - feature coverage
+
+71 catalog sections. This is a menu map. Implemented and verified are
+distinct: 904 simulated/layout checks
+pass. Real assistant replies and Billing & status loading
+were confirmed on a live account in v0.6.0. Other new service flows have the limits described below.
 
 MENU MAP
 
@@ -286,4 +291,99 @@ Help
 Help > Service availability
   Account, hardware and service requirements
   Evidence: Service integrations
-  Limitation: Full Bluetooth provisioning and gateway replacement are unavailable. Amazon sign-in requires an existing eero account using the same Amazon login; Email/phone sign-in remains available for accounts that use it. Purchases remain managed by their billing provider. Guardian VPN needs an eligible account, the Windows WireGuard component and administrator approval.
+  Limitation: Full Bluetooth provisioning and gateway replacement are unavailable. Amazon sign-in requires an existing eero account using the same Amazon login; no developer account or Business subscription is needed. Email/phone sign-in remains available for accounts that use it. Purchases remain managed by their billing provider. Guardian VPN needs an eligible account, the Windows WireGuard component and administrator approval.
+
+REMAINING / ACCOUNT VALIDATION
+
+No spare: BLE write provisioning, gateway replacement, hardware onboarding,
+accessory pairing and cellular activation remain excluded.
+
+Consumer Amazon sign-in is implemented without developer setup or Insight.
+The user completed a real sign-in and confirmed that the Windows dashboard
+loaded. Account, networks, devices, eeros and profiles loaded without section
+errors. Remembered-session restoration and Amazon authentication type were
+verified. An existing eero account using that Amazon login is required; no
+account creation, linking or login-method conversion is performed by Windows.
+ISP broker/provider
+listing works publicly, but complete provider-account login remains unverified.
+Native eero streaming chat is implemented, with a real reply confirmed on a live account. Actual eligibility is server-gated.
+Human-support chat works through advertised secure URLs when provided. Alexa
+web chat is available as a separate service. Additional network actions and
+provider remote-support integrations depend on their service providers.
+
+Billing is implemented through official service UI and entitlement refresh.
+Billing & status was confirmed loading with a real account.
+Google Play receipt verification/restoration remains with Google's platform;
+the Windows refresh button checks eero benefits and does not invent receipts.
+Real purchases/cancellations were not tested.
+
+Guardian device/region/provisioning and Windows tunnel control are implemented.
+Guardian is not offered on the internet service used for testing.
+Actual VPN connection/traffic and administrator installation remain unverified
+and require an account that includes Guardian. Eligibility is checked before
+registration and component installation; no free device slot is reported
+separately from an entitlement or permissions rejection.
+The separately installed official WireGuard component is required. Registered
+provider credentials, account entitlements and permissions must be supplied
+by their respective services.
+
+Notifications use optional Windows startup/tray polling. Remaining managed
+ISP/business/promotion onboarding depends on the provider.
+
+ADDITIONS FROM THE eero ANDROID 26.13.0 AUDIT (2026-11-07)
+
+Every endpoint in eero Android 26.13.0 that this client did not already call
+was added, except the ones listed under Not added. The request formats come from
+the app's Retrofit declarations (work/audits/apk-26.13.0/API-findings.txt).
+873 simulated/layout checks pass. None of these flows were tested against a
+live eero account.
+
+New pages
+  Home > Add or replace eero > Setup tools: pending/packaged eeros, model
+    capabilities, compatibility check (ouicheck), default channel for setup
+    (node_setup), eero replacement report (notify_swap), placement rating.
+  Activity > Usage details: data usage by eero (summary and single eero),
+    profile, devices without a profile; security insights by device, profile
+    and devices in a profile.
+  Settings > Advanced networking > Network flags: view and set network flags.
+  Settings > Network management > Organization & community: community,
+    provider branding, managed summary, pro-managed networks, organization
+    units and unit assignment, network type, holding state.
+  Settings > Account settings > Trusted certificates: list/add/replace/remove.
+  Settings > Account settings > Account data: data controller, SMS
+    countries, app configuration, Amazon directed ID, resend email
+    verification, external-session flag.
+  Settings > Account settings > Subscriptions > Entitlements & trials:
+    included features, upsell features, automatic trial.
+  Settings > Account settings > Subscriptions > Partner offers: offers,
+    partner sign-in method/verification, partner orders, encrypt.me.
+  Help > Report an issue: multipart support report with affected eeros,
+    devices, labels and an optional PNG screenshot.
+
+Additions to existing pages
+  DHCP & NAT: IP Passthrough mode (connection.mode = ipPassthrough), offered
+    when capabilities.ip_passthrough.capable is true; passthrough networks are
+    shown correctly and treated like bridge mode for routing and profiles.
+  eero details: identify with status light (led_cycle), nightlight preview,
+    authorization status, license expiration, setup preconfiguration,
+    placement rating, per-eero data usage, client-wifi-disabled and state.
+  Wifi name & password: server-generated strong password.
+  Wireless settings: Passpoint (Hotspot 2.0) switch, link to network flags.
+  Security & privacy: subnet/profile filter levels, CNAME allow lists for
+    the network and for profiles.
+  Notifications: unread check. User permissions: cancel all pending admin
+    invitations. Internet backup: cellular backup usage/history and
+    per-device backup access (secondary_wan_config). Business guest wifi:
+    enable the portal for other networks. Network management and Outgoing
+    transfer: check a transfer recipient (has_networks). Chat: warm-up request
+    when the chat window opens.
+
+Not added
+  /test/* push and DNS test hooks, issue_tracker (Jira), log/helix and
+  debug_action: eero-internal QA and diagnostics tools.
+  account/pushdevices: needs an Android Firebase push token.
+  account/amazon_login and amazon preauthorized_code: need an Amazon MAP
+  token from Amazon's Android SDK.
+  account/license_activation_consent: declared but never called by the
+  Android app, so its body key is unknown.
+  label?labelType=SpecialMarket: duplicate of the existing specialMarket call.

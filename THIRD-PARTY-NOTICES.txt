@@ -1,4 +1,4 @@
-QRCoder 1.6.0 (net40 assembly)
+QRCoder 1.6.0 (net6.0-windows assembly)
 https://github.com/codebude/QRCoder
 License at source commit bd980577640c47f8bb881cf24c8443415a579d36
 
@@ -33,14 +33,15 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 Full redistribution license is included in LICENSE-WebView2.txt.
 The separately installed WebView2 Runtime is not redistributed.
 
-Microsoft.Windows.SDK.Contracts 10.0.19041.1 is a build-only NuGet
-dependency; its metadata is not included in the binary distribution.
+The Windows SDK .NET projection (Microsoft.Windows.SDK.NET.dll, WinRT.Runtime.dll)
+and System.ServiceProcess.ServiceController.dll are Microsoft components
+distributed with the application under the .NET and Windows SDK licenses.
 
 Guardian Connect for Windows
 https://github.com/GuardianFirewall/GuardianConnect-Windows
 Copyright (c) 2026 Guardian Firewall. MIT license.
 The VPN service contracts and configuration format were checked against this
-SDK. The independent .NET Framework adapter implements
+SDK. The independent .NET adapter implements
 the relevant API calls. LICENSE-Guardian.txt contains the SDK's full license.
 The SDK binaries, its service and its native drivers are not redistributed.
 
