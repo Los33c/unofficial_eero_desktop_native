@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- eero Desktop (Unofficial) for Linux: native GTK 4 + libadwaita through Gir.Core. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>EeroDesktop</RootNamespace>
+    <AssemblyName>eero-desktop</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Deterministic>true</Deterministic>
+    <!-- Code shared with the Windows build keeps its C# 5 style; these warnings are expected there. -->
+    <NoWarn>$(NoWarn);CS1998;CS0162;CS0168;CS0169;CS0219;CS0414;CS0649;CS4014;CA1416</NoWarn>
+    <Version>1.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="GirCore.Adw-1" Version="0.8.1" />
+    <PackageReference Include="GirCore.WebKit-6.0" Version="0.8.1" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../assets/app-icon.png" LogicalName="EeroDesktop.AppIcon.png" />
+    <EmbeddedResource Include="../assets/products/*.png" LogicalName="EeroDesktop.Products.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
