@@ -10,4 +10,4 @@ Categories=Network;GTK;
 Keywords=eero;wifi;mesh;router;network;
 StartupNotify=true
 StartupWMClass=io.github.los33.EeroDesktop
-SingleMainWindow=true
+X-GNOME-SingleWindow=true
